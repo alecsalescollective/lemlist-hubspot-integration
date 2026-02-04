@@ -25,11 +25,18 @@ function getClients() {
   return { supabase, hubspot, lemlist };
 }
 
-// Owner ID to name mapping from config
-const ownerIdToName = config.routing.owners;
-const ownerNameToId = Object.fromEntries(
-  Object.entries(ownerIdToName).map(([id, name]) => [name, id])
-);
+// Owner mappings - computed lazily
+let ownerIdToName, ownerNameToId;
+
+function getOwnerMappings() {
+  if (!ownerIdToName) {
+    ownerIdToName = config.routing.owners;
+    ownerNameToId = Object.fromEntries(
+      Object.entries(ownerIdToName).map(([id, name]) => [name, id])
+    );
+  }
+  return { ownerIdToName, ownerNameToId };
+}
 
 /**
  * Sync Service
@@ -142,6 +149,7 @@ class SyncService {
       await this.updateSyncStatus('tasks', 'in_progress');
 
       // Get owner IDs
+      const { ownerIdToName } = getOwnerMappings();
       const ownerIds = Object.keys(ownerIdToName);
       let allTasks = [];
 
@@ -207,6 +215,7 @@ class SyncService {
       await this.updateSyncStatus('meetings', 'in_progress');
 
       // Get owner IDs
+      const { ownerIdToName } = getOwnerMappings();
       const ownerIds = Object.keys(ownerIdToName);
       let allMeetings = [];
 
