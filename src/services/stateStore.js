@@ -1,80 +1,81 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
 const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('state-store');
 
 /**
- * SQLite State Store
+ * Supabase State Store
  * Tracks processed leads to prevent duplicate processing
  */
 class StateStore {
   /**
    * Create a state store
-   * @param {string} dbPath - Path to SQLite database file
+   * @param {string} supabaseUrl - Supabase project URL
+   * @param {string} supabaseKey - Supabase service role key
    */
-  constructor(dbPath) {
-    this.dbPath = dbPath;
-    this.db = null;
+  constructor(supabaseUrl, supabaseKey) {
+    this.supabaseUrl = supabaseUrl;
+    this.supabaseKey = supabaseKey;
+    this.client = null;
   }
 
   /**
-   * Initialize the database and create tables if needed
+   * Initialize the Supabase client
    */
   initialize() {
-    // Ensure directory exists
-    const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    this.client = createClient(this.supabaseUrl, this.supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
 
-    // Open database
-    this.db = new Database(this.dbPath);
-
-    // Enable WAL mode for better performance
-    this.db.pragma('journal_mode = WAL');
-
-    // Create table if not exists
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS processed_leads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        contact_id TEXT UNIQUE NOT NULL,
-        email TEXT,
-        owner TEXT,
-        campaign_id TEXT,
-        lead_source TEXT,
-        processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_contact_id ON processed_leads(contact_id);
-      CREATE INDEX IF NOT EXISTS idx_email ON processed_leads(email);
-    `);
-
-    logger.info({ dbPath: this.dbPath }, 'State store initialized');
+    logger.info({ url: this.supabaseUrl }, 'Supabase state store initialized');
   }
 
   /**
    * Check if a contact has already been processed
    * @param {string} contactId - HubSpot contact ID
-   * @returns {boolean} True if already processed
+   * @returns {Promise<boolean>} True if already processed
    */
-  isProcessed(contactId) {
-    const stmt = this.db.prepare('SELECT 1 FROM processed_leads WHERE contact_id = ?');
-    const result = stmt.get(contactId);
-    return !!result;
+  async isProcessed(contactId) {
+    const { data, error } = await this.client
+      .from('processed_leads')
+      .select('id')
+      .eq('contact_id', contactId)
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = no rows found, which is expected
+      logger.error({ error, contactId }, 'Error checking if contact is processed');
+      throw error;
+    }
+
+    return !!data;
   }
 
   /**
    * Check if an email has already been processed
    * @param {string} email - Contact email
-   * @returns {boolean} True if already processed
+   * @returns {Promise<boolean>} True if already processed
    */
-  isEmailProcessed(email) {
+  async isEmailProcessed(email) {
     if (!email) return false;
-    const stmt = this.db.prepare('SELECT 1 FROM processed_leads WHERE email = ?');
-    const result = stmt.get(email.toLowerCase());
-    return !!result;
+
+    const { data, error } = await this.client
+      .from('processed_leads')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      logger.error({ error, email }, 'Error checking if email is processed');
+      throw error;
+    }
+
+    return !!data;
   }
 
   /**
@@ -86,95 +87,172 @@ class StateStore {
    * @param {string} data.campaignId - Lemlist campaign ID
    * @param {string} data.leadSource - Lead source
    */
-  markProcessed(contactId, data = {}) {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO processed_leads
-      (contact_id, email, owner, campaign_id, lead_source, processed_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now'))
-    `);
+  async markProcessed(contactId, data = {}) {
+    const record = {
+      contact_id: contactId,
+      email: data.email ? data.email.toLowerCase() : null,
+      owner: data.owner || null,
+      campaign_id: data.campaignId || null,
+      lead_source: data.leadSource || null,
+      processed_at: new Date().toISOString()
+    };
 
-    stmt.run(
-      contactId,
-      data.email ? data.email.toLowerCase() : null,
-      data.owner || null,
-      data.campaignId || null,
-      data.leadSource || null
-    );
+    const { error } = await this.client
+      .from('processed_leads')
+      .upsert(record, {
+        onConflict: 'contact_id',
+        ignoreDuplicates: false
+      });
+
+    if (error) {
+      logger.error({ error, contactId, ...data }, 'Error marking contact as processed');
+      throw error;
+    }
 
     logger.debug({ contactId, ...data }, 'Marked contact as processed');
   }
 
   /**
    * Get the total count of processed leads
-   * @returns {number} Count of processed leads
+   * @returns {Promise<number>} Count of processed leads
    */
-  getProcessedCount() {
-    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM processed_leads');
-    const result = stmt.get();
-    return result.count;
+  async getProcessedCount() {
+    const { count, error } = await this.client
+      .from('processed_leads')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      logger.error({ error }, 'Error getting processed count');
+      throw error;
+    }
+
+    return count || 0;
   }
 
   /**
    * Get processed leads by owner
    * @param {string} owner - Owner name
-   * @returns {Object[]} Array of processed lead records
+   * @returns {Promise<Object[]>} Array of processed lead records
    */
-  getProcessedByOwner(owner) {
-    const stmt = this.db.prepare('SELECT * FROM processed_leads WHERE owner = ?');
-    return stmt.all(owner);
+  async getProcessedByOwner(owner) {
+    const { data, error } = await this.client
+      .from('processed_leads')
+      .select('*')
+      .eq('owner', owner)
+      .order('processed_at', { ascending: false });
+
+    if (error) {
+      logger.error({ error, owner }, 'Error getting processed leads by owner');
+      throw error;
+    }
+
+    return data || [];
   }
 
   /**
    * Get recently processed leads
    * @param {number} limit - Max number of records to return
-   * @returns {Object[]} Array of processed lead records
+   * @returns {Promise<Object[]>} Array of processed lead records
    */
-  getRecentlyProcessed(limit = 100) {
-    const stmt = this.db.prepare(
-      'SELECT * FROM processed_leads ORDER BY processed_at DESC LIMIT ?'
-    );
-    return stmt.all(limit);
+  async getRecentlyProcessed(limit = 100) {
+    const { data, error } = await this.client
+      .from('processed_leads')
+      .select('*')
+      .order('processed_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      logger.error({ error }, 'Error getting recently processed leads');
+      throw error;
+    }
+
+    return data || [];
   }
 
   /**
    * Remove a processed lead record (for reprocessing)
    * @param {string} contactId - HubSpot contact ID
-   * @returns {boolean} True if record was deleted
+   * @returns {Promise<boolean>} True if record was deleted
    */
-  removeProcessed(contactId) {
-    const stmt = this.db.prepare('DELETE FROM processed_leads WHERE contact_id = ?');
-    const result = stmt.run(contactId);
-    return result.changes > 0;
+  async removeProcessed(contactId) {
+    const { data, error } = await this.client
+      .from('processed_leads')
+      .delete()
+      .eq('contact_id', contactId)
+      .select();
+
+    if (error) {
+      logger.error({ error, contactId }, 'Error removing processed lead');
+      throw error;
+    }
+
+    return data && data.length > 0;
   }
 
   /**
    * Get statistics about processed leads
-   * @returns {Object} Statistics object
+   * @returns {Promise<Object>} Statistics object
    */
-  getStats() {
-    const totalStmt = this.db.prepare('SELECT COUNT(*) as count FROM processed_leads');
-    const byOwnerStmt = this.db.prepare(
-      'SELECT owner, COUNT(*) as count FROM processed_leads GROUP BY owner'
-    );
-    const todayStmt = this.db.prepare(
-      "SELECT COUNT(*) as count FROM processed_leads WHERE date(processed_at) = date('now')"
-    );
+  async getStats() {
+    // Get total count
+    const { count: total, error: totalError } = await this.client
+      .from('processed_leads')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      logger.error({ error: totalError }, 'Error getting total count');
+      throw totalError;
+    }
+
+    // Get counts by owner
+    const { data: byOwnerData, error: byOwnerError } = await this.client
+      .rpc('get_processed_leads_by_owner');
+
+    // If RPC doesn't exist, fall back to manual query
+    let byOwner = [];
+    if (byOwnerError) {
+      // Fallback: get all and group in JS
+      const { data: allData } = await this.client
+        .from('processed_leads')
+        .select('owner');
+
+      if (allData) {
+        const counts = {};
+        for (const row of allData) {
+          counts[row.owner] = (counts[row.owner] || 0) + 1;
+        }
+        byOwner = Object.entries(counts).map(([owner, count]) => ({ owner, count }));
+      }
+    } else {
+      byOwner = byOwnerData || [];
+    }
+
+    // Get today's count
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const { count: todayCount, error: todayError } = await this.client
+      .from('processed_leads')
+      .select('*', { count: 'exact', head: true })
+      .gte('processed_at', today.toISOString());
+
+    if (todayError) {
+      logger.error({ error: todayError }, 'Error getting today count');
+      throw todayError;
+    }
 
     return {
-      total: totalStmt.get().count,
-      byOwner: byOwnerStmt.all(),
-      today: todayStmt.get().count
+      total: total || 0,
+      byOwner,
+      today: todayCount || 0
     };
   }
 
   /**
-   * Close the database connection
+   * Close the connection (no-op for Supabase, kept for API compatibility)
    */
   close() {
-    if (this.db) {
-      this.db.close();
-      logger.info('State store closed');
-    }
+    logger.info('State store connection closed');
   }
 }
 
@@ -182,13 +260,18 @@ class StateStore {
 let stateStore = null;
 
 /**
- * Initialize the state store with default path
- * @param {string} dbPath - Optional custom database path
+ * Initialize the state store with Supabase credentials
+ * @param {Object} config - Supabase configuration
+ * @param {string} config.url - Supabase project URL
+ * @param {string} config.serviceRoleKey - Supabase service role key
  * @returns {StateStore}
  */
-function initializeStateStore(dbPath) {
-  const defaultPath = path.join(process.cwd(), 'data', 'processed_leads.db');
-  stateStore = new StateStore(dbPath || defaultPath);
+function initializeStateStore(config) {
+  if (!config || !config.url || !config.serviceRoleKey) {
+    throw new Error('Supabase URL and service role key are required');
+  }
+
+  stateStore = new StateStore(config.url, config.serviceRoleKey);
   stateStore.initialize();
   return stateStore;
 }

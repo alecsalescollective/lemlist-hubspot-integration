@@ -209,14 +209,14 @@ class LeadPipeline {
 
     const logContext = { contactId, email, ownerName, campaignId };
 
-    // Check if already processed in local state store
-    if (this.stateStore.isProcessed(contactId)) {
+    // Check if already processed in Supabase state store
+    if (await this.stateStore.isProcessed(contactId)) {
       runLogger.debug(logContext, 'Contact already processed (in state store), skipping');
       return { skipped: true };
     }
 
     // Also check by email (in case contact ID changed)
-    if (this.stateStore.isEmailProcessed(email)) {
+    if (await this.stateStore.isEmailProcessed(email)) {
       runLogger.debug(logContext, 'Email already processed, skipping');
       return { skipped: true };
     }
@@ -236,8 +236,8 @@ class LeadPipeline {
     if (existingLead) {
       runLogger.info(logContext, 'Lead already exists in Lemlist, marking as processed');
 
-      // Mark as processed in local state store
-      this.stateStore.markProcessed(contactId, {
+      // Mark as processed in Supabase state store
+      await this.stateStore.markProcessed(contactId, {
         email,
         owner: ownerName,
         campaignId,
@@ -291,8 +291,8 @@ class LeadPipeline {
       }
     );
 
-    // Mark as processed in local state store
-    this.stateStore.markProcessed(contactId, {
+    // Mark as processed in Supabase state store
+    await this.stateStore.markProcessed(contactId, {
       email,
       owner: ownerName,
       campaignId,

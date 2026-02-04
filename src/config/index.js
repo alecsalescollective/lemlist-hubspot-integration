@@ -8,7 +8,9 @@ const routingConfig = require('./routing.json');
 const REQUIRED_ENV_VARS = [
   'HUBSPOT_ACCESS_TOKEN',
   'HUBSPOT_PORTAL_ID',
-  'LEMLIST_API_KEY'
+  'LEMLIST_API_KEY',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY'
 ];
 
 /**
@@ -69,6 +71,11 @@ validateEnvironment();
  * Application configuration
  */
 const config = {
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY
+  },
+
   hubspot: {
     accessToken: process.env.HUBSPOT_ACCESS_TOKEN,
     portalId: process.env.HUBSPOT_PORTAL_ID,
@@ -149,6 +156,7 @@ function getRequiredContactProperties() {
 
 // Freeze config to prevent accidental mutation
 Object.freeze(config);
+Object.freeze(config.supabase);
 Object.freeze(config.hubspot);
 Object.freeze(config.lemlist);
 Object.freeze(config.polling);

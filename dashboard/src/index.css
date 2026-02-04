@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/* Custom color variables matching PRD design system */
+:root {
+  --color-primary: #3B82F6;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #F9FAFB;
+}
+
+#root {
+  min-height: 100vh;
+}

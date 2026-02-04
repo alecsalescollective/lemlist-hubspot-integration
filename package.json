@@ -16,9 +16,12 @@
     "lint:fix": "eslint src/ tests/ --fix"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.94.1",
     "axios": "^1.6.7",
     "better-sqlite3": "^12.6.2",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.1",
+    "express": "^5.2.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.9",
     "pino": "^8.18.0",

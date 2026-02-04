@@ -11,7 +11,7 @@ const logger = createLogger('main');
 
 /**
  * Main entry point for the HubSpot-Lemlist integration service
- * Simplified read-only flow: HubSpot (read) -> SQLite (state) -> Lemlist (write)
+ * Simplified read-only flow: HubSpot (read) -> Supabase (state) -> Lemlist (write)
  */
 async function main() {
   logger.info({
@@ -19,11 +19,11 @@ async function main() {
     pollingIntervalMs: config.polling.intervalMs
   }, 'Starting HubSpot-Lemlist integration service (simplified read-only mode)');
 
-  // Initialize state store (SQLite)
-  logger.info('Initializing state store...');
-  const stateStore = initializeStateStore();
-  const stats = stateStore.getStats();
-  logger.info({ processedCount: stats.total }, 'State store initialized');
+  // Initialize state store (Supabase)
+  logger.info('Initializing Supabase state store...');
+  const stateStore = initializeStateStore(config.supabase);
+  const stats = await stateStore.getStats();
+  logger.info({ processedCount: stats.total }, 'Supabase state store initialized');
 
   // Initialize alert manager
   const alertManager = initializeAlertManager(config.alerts);
