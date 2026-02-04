@@ -7,6 +7,7 @@ const tasksRoutes = require('./tasks');
 const meetingsRoutes = require('./meetings');
 const syncRoutes = require('./sync');
 const webhooksRoutes = require('./webhooks');
+const cronRoutes = require('./cron');
 
 // Mount routes
 router.use('/leads', leadsRoutes);
@@ -15,6 +16,7 @@ router.use('/tasks', tasksRoutes);
 router.use('/meetings', meetingsRoutes);
 router.use('/sync', syncRoutes);
 router.use('/webhooks', webhooksRoutes);
+router.use('/cron', cronRoutes);
 
 // API info
 router.get('/', (req, res) => {
