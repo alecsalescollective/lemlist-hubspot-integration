@@ -1,4 +1,4 @@
-const { createLogger } = require('../../src/utils/logger');
+const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('error-handler');
 
