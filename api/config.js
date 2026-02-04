@@ -17,7 +17,7 @@ const config = {
     apiUrl: 'https://api.lemlist.com/api'
   },
   lemcal: {
-    webhookSecret: process.env.LEMCAL_WEBHOOK_SECRET
+    apiKey: process.env.LEMCAL_API_KEY
   },
   routing: {
     // HubSpot owner ID to name mapping
