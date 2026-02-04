@@ -9,7 +9,6 @@ jobs:
   deploy-api:
     name: Deploy API
     runs-on: ubuntu-latest
-    environment: Production - api
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +45,6 @@ jobs:
   deploy-dashboard:
     name: Deploy Dashboard
     runs-on: ubuntu-latest
-    environment: Production - frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
