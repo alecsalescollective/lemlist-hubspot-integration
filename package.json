@@ -1,0 +1,43 @@
+{
+  "name": "hubspot-lemlist-integration",
+  "version": "1.0.0",
+  "description": "Custom integration between HubSpot CRM and Lemlist outreach platform",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^16.4.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.9",
+    "pino": "^8.18.0",
+    "pino-pretty": "^10.3.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "nock": "^13.5.1"
+  },
+  "keywords": [
+    "hubspot",
+    "lemlist",
+    "integration",
+    "crm",
+    "outreach",
+    "automation"
+  ],
+  "author": "Alec",
+  "license": "MIT"
+}

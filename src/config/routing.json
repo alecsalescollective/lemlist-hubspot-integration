@@ -1,0 +1,30 @@
+{
+  "trigger_field": "add_to_lemlist",
+  "trigger_value": "true",
+  "owners": {
+    "161405486": "alec",
+    "228077638": "janae",
+    "75344272": "kate"
+  },
+  "campaigns": {
+    "alec": "cam_s5KBCQdtjwFgCFhkx",
+    "janae": "cam_s5KBCQdtjwFgCFhkx",
+    "kate": "cam_s5KBCQdtjwFgCFhkx"
+  },
+  "field_mappings": {
+    "email": "email",
+    "firstName": "firstname",
+    "lastName": "lastname",
+    "companyName": "company"
+  },
+  "ai_context_fields": {
+    "leadSource": "lead_source",
+    "problemHypothesis": "problem_hypothesis",
+    "salesReps": "sales_reps",
+    "annualRevenue": "annualrevenue"
+  },
+  "exclusion_rules": {
+    "exclude_lifecycle_stages": ["customer", "evangelist"],
+    "exclude_if_email_optout": true
+  }
+}
