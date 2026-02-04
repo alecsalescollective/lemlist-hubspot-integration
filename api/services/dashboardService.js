@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const { createLogger } = require('../../src/utils/logger');
+const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('dashboard-service');
 

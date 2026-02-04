@@ -1,19 +1,29 @@
 const { createClient } = require('@supabase/supabase-js');
-const { createLogger } = require('../../src/utils/logger');
-const HubSpotClient = require('../../src/services/hubspot');
-const LemlistClient = require('../../src/services/lemlist');
-const { config } = require('../../src/config');
+const { createLogger } = require('../utils/logger');
+const HubSpotClient = require('../clients/hubspot');
+const LemlistClient = require('../clients/lemlist');
+const { config } = require('../config');
 
 const logger = createLogger('sync-service');
 
-// Initialize clients
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Initialize clients lazily (after env vars are loaded)
+let supabase, hubspot, lemlist;
 
-const hubspot = new HubSpotClient(config.hubspot);
-const lemlist = new LemlistClient(config.lemlist);
+function getClients() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  if (!hubspot) {
+    hubspot = new HubSpotClient(config.hubspot);
+  }
+  if (!lemlist) {
+    lemlist = new LemlistClient(config.lemlist);
+  }
+  return { supabase, hubspot, lemlist };
+}
 
 // Owner ID to name mapping from config
 const ownerIdToName = config.routing.owners;
@@ -57,6 +67,7 @@ class SyncService {
    */
   async syncCampaigns() {
     logger.info('Starting campaigns sync');
+    const { supabase, lemlist } = getClients();
 
     try {
       // Update status to in_progress
@@ -125,6 +136,7 @@ class SyncService {
    */
   async syncTasks() {
     logger.info('Starting tasks sync');
+    const { supabase, hubspot } = getClients();
 
     try {
       await this.updateSyncStatus('tasks', 'in_progress');
@@ -189,6 +201,7 @@ class SyncService {
    */
   async syncMeetings() {
     logger.info('Starting meetings sync');
+    const { supabase, hubspot } = getClients();
 
     try {
       await this.updateSyncStatus('meetings', 'in_progress');
@@ -251,6 +264,7 @@ class SyncService {
    * Fetch tasks from HubSpot for a specific owner
    */
   async fetchHubSpotTasks(ownerId) {
+    const { hubspot } = getClients();
     try {
       const response = await hubspot.client.post('/crm/v3/objects/tasks/search', {
         filterGroups: [{
@@ -283,6 +297,7 @@ class SyncService {
    * Fetch meetings from HubSpot for a specific owner
    */
   async fetchHubSpotMeetings(ownerId) {
+    const { hubspot } = getClients();
     try {
       const response = await hubspot.client.post('/crm/v3/objects/meetings/search', {
         filterGroups: [{
@@ -315,6 +330,7 @@ class SyncService {
    * Update sync status in Supabase
    */
   async updateSyncStatus(syncType, status, recordsSynced = 0, errorMessage = null) {
+    const { supabase } = getClients();
     const { error } = await supabase
       .from('sync_status')
       .upsert({

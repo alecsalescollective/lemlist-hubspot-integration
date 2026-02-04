@@ -1,0 +1,23 @@
+{
+  "name": "lemlist-hubspot-api",
+  "version": "1.0.0",
+  "description": "API server for HubSpot-Lemlist dashboard",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.94.1",
+    "axios": "^1.6.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.1",
+    "express": "^5.2.1",
+    "node-cron": "^3.0.3",
+    "pino": "^8.18.0",
+    "pino-pretty": "^10.3.1"
+  }
+}
