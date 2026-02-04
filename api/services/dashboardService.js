@@ -3,11 +3,18 @@ const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('dashboard-service');
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Lazy initialization for serverless environment
+let supabase;
+
+function getSupabase() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return supabase;
+}
 
 /**
  * Dashboard Service
@@ -26,7 +33,7 @@ class DashboardService {
     const previousDateFilter = this.getPreviousDateFilter(dateRange);
 
     // Current period counts
-    let query = supabase
+    let query = getSupabase()
       .from('processed_leads')
       .select('*', { count: 'exact' });
 
@@ -41,7 +48,7 @@ class DashboardService {
     if (error) throw error;
 
     // Previous period count for delta
-    let prevQuery = supabase
+    let prevQuery = getSupabase()
       .from('processed_leads')
       .select('*', { count: 'exact', head: true });
 
@@ -95,7 +102,7 @@ class DashboardService {
    * Get paginated leads list
    */
   async getLeads(owner = null, limit = 50, offset = 0) {
-    let query = supabase
+    let query = getSupabase()
       .from('processed_leads')
       .select('*', { count: 'exact' })
       .order('processed_at', { ascending: false })
@@ -127,7 +134,7 @@ class DashboardService {
    * Get all campaigns with metrics
    */
   async getCampaigns(owner = null) {
-    let query = supabase
+    let query = getSupabase()
       .from('campaigns')
       .select('*')
       .order('synced_at', { ascending: false });
@@ -140,7 +147,7 @@ class DashboardService {
     if (error) throw error;
 
     // Get sync status
-    const { data: syncData } = await supabase
+    const { data: syncData } = await getSupabase()
       .from('sync_status')
       .select('last_sync_at')
       .eq('sync_type', 'campaigns')
@@ -172,7 +179,7 @@ class DashboardService {
    * Get single campaign by ID
    */
   async getCampaignById(campaignId) {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('campaigns')
       .select('*')
       .eq('lemlist_campaign_id', campaignId)
@@ -208,7 +215,7 @@ class DashboardService {
    * Get all tasks with optional filters
    */
   async getTasks(owner = null, dueFilter = 'all') {
-    let query = supabase
+    let query = getSupabase()
       .from('tasks')
       .select('*')
       .order('due_at', { ascending: true });
@@ -287,7 +294,7 @@ class DashboardService {
    * Get all meetings with optional filters
    */
   async getMeetings(owner = null, dateFilter = 'all') {
-    let query = supabase
+    let query = getSupabase()
       .from('meetings')
       .select('*')
       .order('scheduled_at', { ascending: true });
@@ -327,7 +334,7 @@ class DashboardService {
   async getMeetingStats(owner = null, dateRange = '30d') {
     const dateFilter = this.getDateFilter(dateRange);
 
-    let query = supabase.from('meetings').select('*');
+    let query = getSupabase().from('meetings').select('*');
 
     if (owner && owner !== 'all') {
       query = query.eq('owner', owner);
@@ -340,7 +347,7 @@ class DashboardService {
     if (error) throw error;
 
     // Get total leads for conversion calculation
-    let leadsQuery = supabase
+    let leadsQuery = getSupabase()
       .from('processed_leads')
       .select('*', { count: 'exact' });
 
@@ -394,7 +401,7 @@ class DashboardService {
    * Get sync status for all data types
    */
   async getSyncStatus() {
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()
       .from('sync_status')
       .select('*')
       .order('sync_type');
@@ -420,7 +427,7 @@ class DashboardService {
    * Update sync status
    */
   async updateSyncStatus(syncType, status, recordsSynced = 0, errorMessage = null) {
-    const { error } = await supabase
+    const { error } = await getSupabase()
       .from('sync_status')
       .upsert({
         sync_type: syncType,
