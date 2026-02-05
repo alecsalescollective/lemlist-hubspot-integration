@@ -289,12 +289,20 @@ class LeadPipelineService {
 
   /**
    * Check if lead exists in Lemlist campaign
+   * Note: Lemlist API returns 200 with empty string "" when lead doesn't exist
+   * So we need to check the response data, not just the status code
    */
   async checkLeadExistsInLemlist(campaignId, email) {
     const { lemlist } = getClients();
 
     try {
-      await lemlist.client.get(`/campaigns/${campaignId}/leads/${encodeURIComponent(email)}`);
+      const response = await lemlist.client.get(`/campaigns/${campaignId}/leads/${encodeURIComponent(email)}`);
+      // Lemlist returns empty string "" or null when lead doesn't exist (but still 200 status)
+      // Only return true if we get actual lead data back
+      const data = response.data;
+      if (!data || data === '' || (typeof data === 'object' && Object.keys(data).length === 0)) {
+        return false;
+      }
       return true;
     } catch (error) {
       if (error.response?.status === 404) {
