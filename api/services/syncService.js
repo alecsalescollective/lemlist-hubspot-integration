@@ -1,13 +1,13 @@
 const { createClient } = require('@supabase/supabase-js');
 const { createLogger } = require('../utils/logger');
-const HubSpotClient = require('../clients/hubspot');
 const LemlistClient = require('../clients/lemlist');
 const { config } = require('../config');
+const leadPipelineService = require('./leadPipelineService');
 
 const logger = createLogger('sync-service');
 
 // Initialize clients lazily (after env vars are loaded)
-let supabase, hubspot, lemlist;
+let supabase, lemlist;
 
 function getClients() {
   if (!supabase) {
@@ -16,31 +16,21 @@ function getClients() {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
   }
-  if (!hubspot) {
-    hubspot = new HubSpotClient(config.hubspot);
-  }
   if (!lemlist) {
     lemlist = new LemlistClient(config.lemlist);
   }
-  return { supabase, hubspot, lemlist };
-}
-
-// Owner mappings - computed lazily
-let ownerIdToName, ownerNameToId;
-
-function getOwnerMappings() {
-  if (!ownerIdToName) {
-    ownerIdToName = config.routing.owners;
-    ownerNameToId = Object.fromEntries(
-      Object.entries(ownerIdToName).map(([id, name]) => [name, id])
-    );
-  }
-  return { ownerIdToName, ownerNameToId };
+  return { supabase, lemlist };
 }
 
 /**
  * Sync Service
- * Handles syncing data from HubSpot and Lemlist to Supabase
+ * Handles syncing data from Lemlist to Supabase
+ *
+ * Data sources:
+ * - Leads: HubSpot → Lemlist (via leadPipelineService)
+ * - Campaigns: Lemlist API
+ * - Meetings: Lemcal webhooks (not synced here - real-time via webhook)
+ * - Activities: Lemlist webhooks (not synced here - real-time via webhook)
  */
 class SyncService {
   /**
@@ -50,16 +40,21 @@ class SyncService {
     const results = {};
 
     try {
+      // Sync HubSpot leads to Lemlist (the main pipeline)
+      if (type === 'all' || type === 'leads') {
+        results.leads = await leadPipelineService.run();
+      }
+
       if (type === 'all' || type === 'campaigns') {
         results.campaigns = await this.syncCampaigns();
       }
 
-      if (type === 'all' || type === 'tasks') {
-        results.tasks = await this.syncTasks();
-      }
-
-      if (type === 'all' || type === 'meetings') {
-        results.meetings = await this.syncMeetings();
+      // Note: Meetings come from Lemcal webhooks, not API sync
+      if (type === 'meetings') {
+        results.meetings = {
+          synced: 0,
+          message: 'Meetings are captured via Lemcal webhooks in real-time'
+        };
       }
 
       return results;
@@ -139,203 +134,6 @@ class SyncService {
   }
 
   /**
-   * Sync HubSpot tasks to Supabase
-   */
-  async syncTasks() {
-    logger.info('Starting tasks sync');
-    const { supabase, hubspot } = getClients();
-
-    try {
-      await this.updateSyncStatus('tasks', 'in_progress');
-
-      // Get owner IDs
-      const { ownerIdToName } = getOwnerMappings();
-      const ownerIds = Object.keys(ownerIdToName);
-      let allTasks = [];
-
-      // Fetch tasks for each owner
-      for (const ownerId of ownerIds) {
-        try {
-          const tasks = await this.fetchHubSpotTasks(ownerId);
-          allTasks = allTasks.concat(tasks.map(t => ({
-            ...t,
-            ownerName: ownerIdToName[ownerId]
-          })));
-        } catch (error) {
-          logger.warn({ ownerId, error: error.message }, 'Failed to fetch tasks for owner');
-        }
-      }
-
-      logger.info({ count: allTasks.length }, 'Fetched tasks from HubSpot');
-
-      let synced = 0;
-
-      for (const task of allTasks) {
-        const { error } = await supabase
-          .from('tasks')
-          .upsert({
-            hubspot_task_id: task.id,
-            type: this.mapTaskType(task.properties?.hs_task_type),
-            subject: task.properties?.hs_task_subject || 'No subject',
-            body: task.properties?.hs_task_body,
-            owner: task.ownerName,
-            status: this.mapTaskStatus(task.properties?.hs_task_status),
-            priority: task.properties?.hs_task_priority?.toLowerCase(),
-            due_at: task.properties?.hs_timestamp,
-            contact_id: task.associations?.contacts?.[0]?.id,
-            synced_at: new Date().toISOString()
-          }, { onConflict: 'hubspot_task_id' });
-
-        if (error) {
-          logger.error({ error, taskId: task.id }, 'Failed to upsert task');
-        } else {
-          synced++;
-        }
-      }
-
-      await this.updateSyncStatus('tasks', 'success', synced);
-
-      logger.info({ synced }, 'Tasks sync completed');
-      return { synced, total: allTasks.length };
-
-    } catch (error) {
-      await this.updateSyncStatus('tasks', 'failed', 0, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Sync HubSpot meetings to Supabase
-   */
-  async syncMeetings() {
-    logger.info('Starting meetings sync');
-    const { supabase, hubspot } = getClients();
-
-    try {
-      await this.updateSyncStatus('meetings', 'in_progress');
-
-      // Get owner IDs
-      const { ownerIdToName } = getOwnerMappings();
-      const ownerIds = Object.keys(ownerIdToName);
-      let allMeetings = [];
-
-      // Fetch meetings for each owner
-      for (const ownerId of ownerIds) {
-        try {
-          const meetings = await this.fetchHubSpotMeetings(ownerId);
-          allMeetings = allMeetings.concat(meetings.map(m => ({
-            ...m,
-            ownerName: ownerIdToName[ownerId]
-          })));
-        } catch (error) {
-          logger.warn({ ownerId, error: error.message }, 'Failed to fetch meetings for owner');
-        }
-      }
-
-      logger.info({ count: allMeetings.length }, 'Fetched meetings from HubSpot');
-
-      let synced = 0;
-
-      for (const meeting of allMeetings) {
-        const { error } = await supabase
-          .from('meetings')
-          .upsert({
-            hubspot_meeting_id: meeting.id,
-            title: meeting.properties?.hs_meeting_title || 'Meeting',
-            owner: meeting.ownerName,
-            scheduled_at: meeting.properties?.hs_meeting_start_time || meeting.properties?.hs_timestamp,
-            end_at: meeting.properties?.hs_meeting_end_time,
-            outcome: this.mapMeetingOutcome(meeting.properties?.hs_meeting_outcome),
-            contact_id: meeting.associations?.contacts?.[0]?.id,
-            notes: meeting.properties?.hs_meeting_body,
-            synced_at: new Date().toISOString()
-          }, { onConflict: 'hubspot_meeting_id' });
-
-        if (error) {
-          logger.error({ error, meetingId: meeting.id }, 'Failed to upsert meeting');
-        } else {
-          synced++;
-        }
-      }
-
-      await this.updateSyncStatus('meetings', 'success', synced);
-
-      logger.info({ synced }, 'Meetings sync completed');
-      return { synced, total: allMeetings.length };
-
-    } catch (error) {
-      await this.updateSyncStatus('meetings', 'failed', 0, error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Fetch tasks from HubSpot for a specific owner
-   */
-  async fetchHubSpotTasks(ownerId) {
-    const { hubspot } = getClients();
-    try {
-      const response = await hubspot.client.post('/crm/v3/objects/tasks/search', {
-        filterGroups: [{
-          filters: [{
-            propertyName: 'hubspot_owner_id',
-            operator: 'EQ',
-            value: ownerId
-          }]
-        }],
-        properties: [
-          'hs_task_subject',
-          'hs_task_body',
-          'hs_task_status',
-          'hs_task_priority',
-          'hs_task_type',
-          'hs_timestamp',
-          'hubspot_owner_id'
-        ],
-        limit: 100
-      });
-
-      return response.data?.results || [];
-    } catch (error) {
-      logger.error({ error: error.message, ownerId }, 'HubSpot tasks fetch failed');
-      return [];
-    }
-  }
-
-  /**
-   * Fetch meetings from HubSpot for a specific owner
-   */
-  async fetchHubSpotMeetings(ownerId) {
-    const { hubspot } = getClients();
-    try {
-      const response = await hubspot.client.post('/crm/v3/objects/meetings/search', {
-        filterGroups: [{
-          filters: [{
-            propertyName: 'hubspot_owner_id',
-            operator: 'EQ',
-            value: ownerId
-          }]
-        }],
-        properties: [
-          'hs_meeting_title',
-          'hs_meeting_body',
-          'hs_meeting_start_time',
-          'hs_meeting_end_time',
-          'hs_meeting_outcome',
-          'hs_timestamp',
-          'hubspot_owner_id'
-        ],
-        limit: 100
-      });
-
-      return response.data?.results || [];
-    } catch (error) {
-      logger.error({ error: error.message, ownerId }, 'HubSpot meetings fetch failed');
-      return [];
-    }
-  }
-
-  /**
    * Update sync status in Supabase
    */
   async updateSyncStatus(syncType, status, recordsSynced = 0, errorMessage = null) {
@@ -353,48 +151,6 @@ class SyncService {
     if (error) {
       logger.error({ error, syncType }, 'Failed to update sync status');
     }
-  }
-
-  /**
-   * Map HubSpot task type to our type
-   */
-  mapTaskType(hsType) {
-    const typeMap = {
-      'EMAIL': 'email',
-      'CALL': 'call',
-      'TODO': 'todo',
-      'LINKEDIN_MESSAGE': 'linkedin',
-      'LINKEDIN_CONNECT': 'linkedin'
-    };
-    return typeMap[hsType] || 'todo';
-  }
-
-  /**
-   * Map HubSpot task status to our status
-   */
-  mapTaskStatus(hsStatus) {
-    const statusMap = {
-      'NOT_STARTED': 'pending',
-      'IN_PROGRESS': 'in_progress',
-      'WAITING': 'pending',
-      'COMPLETED': 'completed',
-      'DEFERRED': 'pending'
-    };
-    return statusMap[hsStatus] || 'pending';
-  }
-
-  /**
-   * Map HubSpot meeting outcome to our outcome
-   */
-  mapMeetingOutcome(hsOutcome) {
-    const outcomeMap = {
-      'SCHEDULED': 'scheduled',
-      'COMPLETED': 'completed',
-      'NO_SHOW': 'no_show',
-      'RESCHEDULED': 'rescheduled',
-      'CANCELLED': 'cancelled'
-    };
-    return outcomeMap[hsOutcome] || 'scheduled';
   }
 }
 

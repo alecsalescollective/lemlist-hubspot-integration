@@ -72,8 +72,10 @@ async function seedData() {
   console.log('🧹 Clearing existing demo data...');
   await supabase.from('processed_leads').delete().like('contact_id', 'demo_%');
   await supabase.from('campaigns').delete().like('lemlist_campaign_id', 'camp_%');
-  await supabase.from('meetings').delete().like('hubspot_meeting_id', 'demo_%');
-  await supabase.from('tasks').delete().like('hubspot_task_id', 'demo_%');
+  // Try both old and new column names for meetings
+  await supabase.from('meetings').delete().like('lemcal_meeting_id', 'demo_%');
+  // Try both old and new column names for tasks
+  await supabase.from('tasks').delete().like('external_task_id', 'demo_%');
   try {
     await supabase.from('lead_activities').delete().like('lead_email', '%@example%');
   } catch (e) {
@@ -162,8 +164,8 @@ async function seedData() {
     }
   }
 
-  // 4. Seed Meetings
-  console.log('📅 Creating meetings...');
+  // 4. Seed Meetings (from Lemcal)
+  console.log('📅 Creating meetings (Lemcal)...');
   const meetings = [];
   const meetingTitles = ['Discovery Call', 'Product Demo', 'Follow-up Meeting', 'Technical Review', 'Intro Call'];
 
@@ -173,7 +175,7 @@ async function seedData() {
     const isPast = scheduledAt < new Date();
 
     meetings.push({
-      hubspot_meeting_id: `demo_meeting_${i}`,
+      lemcal_meeting_id: `demo_meeting_${i}`,  // Changed from hubspot_meeting_id
       title: pick(meetingTitles),
       owner,
       scheduled_at: scheduledAt.toISOString(),
@@ -189,7 +191,7 @@ async function seedData() {
 
   const { error: meetingsError } = await supabase
     .from('meetings')
-    .upsert(meetings, { onConflict: 'hubspot_meeting_id' });
+    .upsert(meetings, { onConflict: 'lemcal_meeting_id' });  // Changed conflict column
 
   if (meetingsError) {
     console.error('  ❌ Error:', meetingsError.message);
@@ -197,8 +199,9 @@ async function seedData() {
     console.log(`  ✅ Created ${meetings.length} meetings`);
   }
 
-  // 5. Seed Tasks
-  console.log('✅ Creating tasks...');
+  // 5. Seed Tasks (DEPRECATED - use lead_activities instead)
+  // Keeping for backwards compatibility but tasks table is being phased out
+  console.log('✅ Creating tasks (deprecated - use lead_activities)...');
   const tasks = [];
   const taskTypes = ['email', 'call', 'linkedin', 'todo'];
   const taskSubjects = [
@@ -213,7 +216,7 @@ async function seedData() {
     dueDate.setDate(dueDate.getDate() + daysOffset);
 
     tasks.push({
-      hubspot_task_id: `demo_task_${i}`,
+      external_task_id: `demo_task_${i}`,  // Changed from hubspot_task_id
       type: pick(taskTypes),
       subject: pick(taskSubjects),
       body: `Task details for item ${i}`,
@@ -231,7 +234,7 @@ async function seedData() {
 
   const { error: tasksError } = await supabase
     .from('tasks')
-    .upsert(tasks, { onConflict: 'hubspot_task_id' });
+    .upsert(tasks, { onConflict: 'external_task_id' });  // Changed conflict column
 
   if (tasksError) {
     console.error('  ❌ Error:', tasksError.message);

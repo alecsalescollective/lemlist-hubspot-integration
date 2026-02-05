@@ -264,7 +264,7 @@ class DashboardService {
 
     return {
       tasks: allTasks.map(t => ({
-        id: t.hubspot_task_id,
+        id: t.external_task_id,  // Changed from hubspot_task_id
         type: t.type,
         subject: t.subject,
         owner: t.owner,
@@ -315,7 +315,7 @@ class DashboardService {
 
     return {
       meetings: (data || []).map(m => ({
-        id: m.hubspot_meeting_id,
+        id: m.lemcal_meeting_id,  // Changed from hubspot_meeting_id
         title: m.title,
         owner: m.owner,
         scheduledAt: m.scheduled_at,
@@ -323,6 +323,7 @@ class DashboardService {
         outcome: m.outcome,
         contactName: m.contact_name,
         contactCompany: m.contact_company,
+        contactEmail: m.contact_email,
         sourceCampaign: m.source_campaign
       }))
     };

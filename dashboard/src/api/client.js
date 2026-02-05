@@ -34,14 +34,6 @@ export const campaignsApi = {
     api.get(`/campaigns/${id}`).then(r => r.data)
 };
 
-export const tasksApi = {
-  getAll: (owner, due = 'all') =>
-    api.get('/tasks', { params: { owner, due } }).then(r => r.data),
-
-  getOverdue: (owner) =>
-    api.get('/tasks/overdue', { params: { owner } }).then(r => r.data)
-};
-
 export const meetingsApi = {
   getAll: (owner, date = 'all') =>
     api.get('/meetings', { params: { owner, date } }).then(r => r.data),

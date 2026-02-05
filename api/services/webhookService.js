@@ -28,7 +28,8 @@ function getClients() {
 class WebhookService {
   /**
    * Handle lemcal meeting booked webhook
-   * Marks the lead as interested in lemlist, triggering Salesforce opportunity creation
+   * 1. Stores meeting in meetings table
+   * 2. Marks lead as interested in lemlist (triggers Salesforce opportunity)
    *
    * @param {Object} payload - Webhook payload from lemcal
    * @returns {Promise<Object>} - Result of the operation
@@ -46,13 +47,111 @@ class WebhookService {
 
     logger.info({ email }, 'Processing meeting booked webhook');
 
-    // Mark lead as interested in lemlist
-    const result = await this.markLeadInterested(email);
+    // 1. Store meeting in database
+    const meetingResult = await this.storeMeetingFromWebhook(payload, email);
+
+    // 2. Mark lead as interested in lemlist
+    let interestedResult = null;
+    try {
+      interestedResult = await this.markLeadInterested(email);
+    } catch (error) {
+      // Log but don't fail - meeting is still stored
+      logger.warn({ email, error: error.message }, 'Failed to mark lead as interested, but meeting was stored');
+    }
 
     // Log the event to Supabase for tracking
-    await this.logWebhookEvent('lemcal_meeting_booked', email, payload, result);
+    await this.logWebhookEvent('lemcal_meeting_booked', email, payload, {
+      meeting: meetingResult,
+      interested: interestedResult
+    });
 
-    return result;
+    return {
+      meeting: meetingResult,
+      interested: interestedResult
+    };
+  }
+
+  /**
+   * Store a meeting from Lemcal webhook payload
+   *
+   * @param {Object} payload - Lemcal webhook payload
+   * @param {string} email - Lead email
+   * @returns {Promise<Object>} - Stored meeting data
+   */
+  async storeMeetingFromWebhook(payload, email) {
+    const { supabase } = getClients();
+
+    // Extract meeting data from payload
+    // Lemcal webhook format based on API docs
+    const meetingId = payload._id || payload.id || payload.meetingId || `wh_${Date.now()}`;
+    const startTime = payload.start || payload.startTime || payload.scheduledAt;
+    const endTime = payload.end || payload.endTime;
+
+    // Extract lead name
+    let contactName = null;
+    if (payload.lead) {
+      contactName = `${payload.lead.firstName || ''} ${payload.lead.lastName || ''}`.trim() || null;
+    } else if (payload.firstName) {
+      contactName = `${payload.firstName} ${payload.lastName || ''}`.trim();
+    }
+
+    // Try to determine owner from attendees or meeting type
+    const owner = this.determineOwnerFromWebhook(payload);
+
+    const meetingData = {
+      lemcal_meeting_id: meetingId,
+      title: payload.meetingTypeName || payload.title || 'Meeting',
+      owner,
+      scheduled_at: startTime || new Date().toISOString(),
+      end_at: endTime || null,
+      outcome: 'scheduled', // Lemcal only tells us about booked meetings
+      contact_email: email,
+      contact_name: contactName,
+      notes: payload.providedInfos || payload.notes || null,
+      synced_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('meetings')
+      .upsert(meetingData, { onConflict: 'lemcal_meeting_id' })
+      .select()
+      .single();
+
+    if (error) {
+      logger.error({ error: error.message, meetingId }, 'Failed to store meeting from webhook');
+      throw error;
+    }
+
+    logger.info({ meetingId, email }, 'Meeting stored from webhook');
+
+    return {
+      success: true,
+      meetingId,
+      stored: true
+    };
+  }
+
+  /**
+   * Determine owner from webhook payload
+   * Check attendees against known team emails
+   */
+  determineOwnerFromWebhook(payload) {
+    // You can configure these in routing.json or environment
+    const knownOwnerEmails = {
+      // 'alec@yourcompany.com': 'alec',
+      // 'janae@yourcompany.com': 'janae',
+      // 'kate@yourcompany.com': 'kate'
+    };
+
+    // Check attendees
+    if (payload.attendees?.length > 0) {
+      for (const attendee of payload.attendees) {
+        const owner = knownOwnerEmails[attendee.email?.toLowerCase()];
+        if (owner) return owner;
+      }
+    }
+
+    return null;
   }
 
   /**

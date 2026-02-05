@@ -3,7 +3,6 @@ const router = express.Router();
 
 const leadsRoutes = require('./leads');
 const campaignsRoutes = require('./campaigns');
-const tasksRoutes = require('./tasks');
 const meetingsRoutes = require('./meetings');
 const syncRoutes = require('./sync');
 const webhooksRoutes = require('./webhooks');
@@ -13,7 +12,6 @@ const funnelRoutes = require('./funnel');
 // Mount routes
 router.use('/leads', leadsRoutes);
 router.use('/campaigns', campaignsRoutes);
-router.use('/tasks', tasksRoutes);
 router.use('/meetings', meetingsRoutes);
 router.use('/sync', syncRoutes);
 router.use('/webhooks', webhooksRoutes);
@@ -28,7 +26,6 @@ router.get('/', (req, res) => {
     endpoints: {
       leads: '/api/leads',
       campaigns: '/api/campaigns',
-      tasks: '/api/tasks',
       meetings: '/api/meetings',
       sync: '/api/sync',
       webhooks: '/api/webhooks',

@@ -16,9 +16,8 @@ const config = {
     apiKey: process.env.LEMLIST_API_KEY,
     apiUrl: 'https://api.lemlist.com/api'
   },
-  lemcal: {
-    apiKey: process.env.LEMCAL_API_KEY
-  },
+  // Lemcal meetings come via webhooks - no API credentials needed
+  lemcal: {},
   routing: {
     // HubSpot owner ID to name mapping
     owners: {
