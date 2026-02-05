@@ -5,10 +5,13 @@ const axios = require('axios');
  */
 class HubSpotClient {
   constructor(config) {
+    // Trim token in case of whitespace in env var
+    const token = (config.accessToken || '').trim();
+
     this.client = axios.create({
       baseURL: config.apiUrl || 'https://api.hubapi.com',
       headers: {
-        'Authorization': `Bearer ${config.accessToken}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
