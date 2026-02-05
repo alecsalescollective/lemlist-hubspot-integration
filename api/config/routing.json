@@ -21,7 +21,8 @@
     "leadSource": "lead_source",
     "problemHypothesis": "problem_hypothesis",
     "salesReps": "sales_reps",
-    "annualRevenue": "annualrevenue"
+    "annualRevenue": "annualrevenue",
+    "sourceDetail": "hs_object_source_detail_1"
   },
   "exclusion_rules": {
     "exclude_lifecycle_stages": ["customer", "evangelist"],
