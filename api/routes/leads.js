@@ -17,6 +17,20 @@ router.get('/summary', async (req, res, next) => {
 });
 
 /**
+ * GET /api/leads/activities
+ * Get recent lead activities (opens, replies, clicks from Lemlist)
+ */
+router.get('/activities', async (req, res, next) => {
+  try {
+    const { owner, limit = 20 } = req.query;
+    const activities = await dashboardService.getLeadActivities(owner, parseInt(limit, 10));
+    res.json(activities);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/leads
  * Get paginated leads list
  */

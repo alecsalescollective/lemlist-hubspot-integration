@@ -8,6 +8,7 @@ const meetingsRoutes = require('./meetings');
 const syncRoutes = require('./sync');
 const webhooksRoutes = require('./webhooks');
 const cronRoutes = require('./cron');
+const funnelRoutes = require('./funnel');
 
 // Mount routes
 router.use('/leads', leadsRoutes);
@@ -17,6 +18,7 @@ router.use('/meetings', meetingsRoutes);
 router.use('/sync', syncRoutes);
 router.use('/webhooks', webhooksRoutes);
 router.use('/cron', cronRoutes);
+router.use('/funnel', funnelRoutes);
 
 // API info
 router.get('/', (req, res) => {
@@ -29,7 +31,8 @@ router.get('/', (req, res) => {
       tasks: '/api/tasks',
       meetings: '/api/meetings',
       sync: '/api/sync',
-      webhooks: '/api/webhooks'
+      webhooks: '/api/webhooks',
+      funnel: '/api/funnel'
     }
   });
 });

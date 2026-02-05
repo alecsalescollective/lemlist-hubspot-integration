@@ -441,6 +441,220 @@ class DashboardService {
   }
 
   // ==========================================
+  // FUNNEL STATS
+  // ==========================================
+
+  /**
+   * Get funnel statistics: Leads -> In Sequence -> Meetings Booked
+   * Note: Funnel ends at meetings booked - outcomes require Salesforce integration
+   */
+  async getFunnelStats(owner = null, dateRange = '30d') {
+    const dateFilter = this.getDateFilter(dateRange);
+    const previousDateFilter = this.getPreviousDateFilter(dateRange);
+
+    // Stage 1: Total Leads (from processed_leads)
+    let leadsQuery = getSupabase()
+      .from('processed_leads')
+      .select('*', { count: 'exact' });
+
+    if (owner && owner !== 'all') {
+      leadsQuery = leadsQuery.eq('owner', owner);
+    }
+    if (dateFilter) {
+      leadsQuery = leadsQuery.gte('processed_at', dateFilter);
+    }
+
+    const { data: leads, count: totalLeads, error: leadsError } = await leadsQuery;
+    if (leadsError) throw leadsError;
+
+    // Stage 2: In Sequence (leads with campaign_id in processed_leads)
+    const inSequence = (leads || []).filter(l => l.campaign_id).length;
+
+    // Stage 3: Meetings Booked (from meetings table)
+    let meetingsQuery = getSupabase()
+      .from('meetings')
+      .select('*', { count: 'exact' });
+
+    if (owner && owner !== 'all') {
+      meetingsQuery = meetingsQuery.eq('owner', owner);
+    }
+    if (dateFilter) {
+      meetingsQuery = meetingsQuery.gte('scheduled_at', dateFilter);
+    }
+
+    const { count: totalMeetings, error: meetingsError } = await meetingsQuery;
+    if (meetingsError) throw meetingsError;
+
+    // Previous period for trend calculation
+    let prevLeadsQuery = getSupabase()
+      .from('processed_leads')
+      .select('*', { count: 'exact', head: true });
+
+    if (owner && owner !== 'all') {
+      prevLeadsQuery = prevLeadsQuery.eq('owner', owner);
+    }
+    if (previousDateFilter) {
+      prevLeadsQuery = prevLeadsQuery
+        .gte('processed_at', previousDateFilter.start)
+        .lt('processed_at', previousDateFilter.end);
+    }
+
+    const { count: prevLeads } = await prevLeadsQuery;
+
+    let prevMeetingsQuery = getSupabase()
+      .from('meetings')
+      .select('*', { count: 'exact', head: true });
+
+    if (owner && owner !== 'all') {
+      prevMeetingsQuery = prevMeetingsQuery.eq('owner', owner);
+    }
+    if (previousDateFilter) {
+      prevMeetingsQuery = prevMeetingsQuery
+        .gte('scheduled_at', previousDateFilter.start)
+        .lt('scheduled_at', previousDateFilter.end);
+    }
+
+    const { count: prevMeetings } = await prevMeetingsQuery;
+
+    // Calculate conversion rates
+    const leadToSequenceRate = (totalLeads || 0) > 0
+      ? Math.round((inSequence / totalLeads) * 1000) / 10
+      : 0;
+
+    const sequenceToMeetingRate = inSequence > 0
+      ? Math.round(((totalMeetings || 0) / inSequence) * 1000) / 10
+      : 0;
+
+    const leadToMeetingRate = (totalLeads || 0) > 0
+      ? Math.round(((totalMeetings || 0) / totalLeads) * 1000) / 10
+      : 0;
+
+    // Previous period lead-to-meeting rate for trend
+    const prevLeadToMeetingRate = (prevLeads || 0) > 0
+      ? Math.round(((prevMeetings || 0) / prevLeads) * 1000) / 10
+      : 0;
+
+    const leadToMeetingTrend = leadToMeetingRate - prevLeadToMeetingRate;
+
+    return {
+      stages: [
+        { name: 'Total Leads', count: totalLeads || 0, color: '#6B7280' },
+        { name: 'In Sequence', count: inSequence, color: '#3B82F6' },
+        { name: 'Meetings Booked', count: totalMeetings || 0, color: '#10B981' }
+      ],
+      conversions: {
+        leadToSequence: leadToSequenceRate,
+        sequenceToMeeting: sequenceToMeetingRate,
+        leadToMeeting: leadToMeetingRate
+      },
+      trend: {
+        leadToMeeting: Math.round(leadToMeetingTrend * 10) / 10
+      },
+      period: dateRange,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Get recent lead activities (from lead_activities table)
+   * Falls back to campaign metrics if no activity table exists
+   */
+  async getLeadActivities(owner = null, limit = 20) {
+    try {
+      // Try to get from lead_activities table
+      let query = getSupabase()
+        .from('lead_activities')
+        .select('*')
+        .order('activity_at', { ascending: false })
+        .limit(limit);
+
+      if (owner && owner !== 'all') {
+        query = query.eq('owner', owner);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        // Table might not exist yet, return empty
+        logger.warn({ error: error.message }, 'Lead activities table not available');
+        return {
+          activities: [],
+          counts: { opens: 0, replies: 0, clicks: 0 },
+          message: 'Activity tracking not yet configured'
+        };
+      }
+
+      // Calculate counts by type
+      const counts = {
+        opens: (data || []).filter(a => a.activity_type === 'email_opened').length,
+        replies: (data || []).filter(a => a.activity_type === 'email_replied').length,
+        clicks: (data || []).filter(a => a.activity_type === 'email_clicked').length
+      };
+
+      return {
+        activities: (data || []).map(a => ({
+          id: a.id,
+          type: a.activity_type,
+          email: a.lead_email,
+          contactName: a.contact_name || a.lead_email.split('@')[0],
+          campaign: a.campaign_name,
+          campaignId: a.campaign_id,
+          owner: a.owner,
+          timestamp: a.activity_at
+        })),
+        counts
+      };
+    } catch (error) {
+      logger.error({ error: error.message }, 'Error fetching lead activities');
+      return {
+        activities: [],
+        counts: { opens: 0, replies: 0, clicks: 0 },
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get campaigns with meeting attribution
+   */
+  async getCampaignsWithMeetings(owner = null) {
+    const { campaigns } = await this.getCampaigns(owner);
+
+    // Get meetings grouped by source campaign
+    let meetingsQuery = getSupabase()
+      .from('meetings')
+      .select('source_campaign');
+
+    if (owner && owner !== 'all') {
+      meetingsQuery = meetingsQuery.eq('owner', owner);
+    }
+
+    const { data: meetings } = await meetingsQuery;
+
+    // Count meetings per campaign
+    const meetingsByCampaign = {};
+    (meetings || []).forEach(m => {
+      if (m.source_campaign) {
+        meetingsByCampaign[m.source_campaign] = (meetingsByCampaign[m.source_campaign] || 0) + 1;
+      }
+    });
+
+    // Enhance campaigns with meeting data
+    return {
+      campaigns: campaigns.map(c => ({
+        ...c,
+        metrics: {
+          ...c.metrics,
+          meetingsBooked: meetingsByCampaign[c.id] || 0,
+          meetingConversionRate: c.metrics.leadsCount > 0
+            ? Math.round(((meetingsByCampaign[c.id] || 0) / c.metrics.leadsCount) * 1000) / 10
+            : 0
+        }
+      }))
+    };
+  }
+
+  // ==========================================
   // HELPERS
   // ==========================================
 

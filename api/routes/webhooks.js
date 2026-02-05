@@ -88,6 +88,55 @@ router.post('/lemcal/test', async (req, res) => {
 });
 
 /**
+ * POST /api/webhooks/lemlist/activity
+ * Handle Lemlist activity webhooks (opens, clicks, replies, bounces)
+ *
+ * Configure in Lemlist:
+ * 1. Go to Settings -> Integrations -> Webhooks
+ * 2. Add new webhook for events: emailsOpened, emailsClicked, emailsReplied, emailsBounced
+ * 3. Set URL to: https://your-api.vercel.app/api/webhooks/lemlist/activity
+ */
+router.post('/lemlist/activity', async (req, res) => {
+  try {
+    const payload = req.body;
+
+    logger.info({
+      event: payload.type || payload.event,
+      email: payload.email || payload.leadEmail
+    }, 'Received Lemlist activity webhook');
+
+    if (!payload) {
+      return res.status(400).json({ error: 'Empty payload' });
+    }
+
+    const result = await webhookService.handleLemlistActivity(payload);
+
+    res.json({
+      success: true,
+      message: 'Activity recorded',
+      result
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, stack: error.stack }, 'Lemlist activity webhook error');
+
+    // Return 200 to prevent retries for known errors
+    if (error.message.includes('No email') || error.message.includes('No activity')) {
+      return res.json({
+        success: false,
+        message: error.message,
+        skipped: true
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/webhooks/health
  * Health check for webhook endpoint
  */

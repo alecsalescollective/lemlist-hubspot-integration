@@ -15,7 +15,15 @@ export const leadsApi = {
     api.get('/leads/summary', { params: { owner, period } }).then(r => r.data),
 
   getLeads: (owner, limit = 50, offset = 0) =>
-    api.get('/leads', { params: { owner, limit, offset } }).then(r => r.data)
+    api.get('/leads', { params: { owner, limit, offset } }).then(r => r.data),
+
+  getActivities: (owner, limit = 20) =>
+    api.get('/leads/activities', { params: { owner, limit } }).then(r => r.data)
+};
+
+export const funnelApi = {
+  getStats: (owner, period = '30d') =>
+    api.get('/funnel/stats', { params: { owner, period } }).then(r => r.data)
 };
 
 export const campaignsApi = {

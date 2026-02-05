@@ -136,6 +136,90 @@ class WebhookService {
   }
 
   /**
+   * Handle Lemlist activity webhook
+   * Stores email opens, replies, clicks to lead_activities table
+   *
+   * @param {Object} payload - Webhook payload from Lemlist
+   * @returns {Promise<Object>} - Result of the operation
+   */
+  async handleLemlistActivity(payload) {
+    const { supabase } = getClients();
+
+    // Map Lemlist webhook types to our activity types
+    const activityTypeMap = {
+      'emailsOpened': 'email_opened',
+      'emailsSent': 'email_sent',
+      'emailsReplied': 'email_replied',
+      'emailsClicked': 'email_clicked',
+      'emailsBounced': 'email_bounced',
+      'opened': 'email_opened',
+      'sent': 'email_sent',
+      'replied': 'email_replied',
+      'clicked': 'email_clicked',
+      'bounced': 'email_bounced'
+    };
+
+    const email = payload.email || payload.leadEmail;
+    const eventType = payload.type || payload.event || payload.eventType;
+    const activityType = activityTypeMap[eventType] || eventType;
+
+    if (!email) {
+      logger.warn({ payload }, 'No email in Lemlist activity payload');
+      throw new Error('No email found in webhook payload');
+    }
+
+    if (!activityType) {
+      logger.warn({ payload }, 'No activity type in Lemlist payload');
+      throw new Error('No activity type found in webhook payload');
+    }
+
+    logger.info({ email, activityType }, 'Processing Lemlist activity webhook');
+
+    // Extract campaign info and owner
+    const campaignId = payload.campaignId || payload.campaign?._id;
+    const campaignName = payload.campaignName || payload.campaign?.name;
+
+    // Derive owner from campaign name (e.g., "Alec - Q4 Outreach" -> "alec")
+    let owner = null;
+    if (campaignName) {
+      const ownerMatch = campaignName.match(/^(alec|janae|kate)/i);
+      if (ownerMatch) {
+        owner = ownerMatch[1].toLowerCase();
+      }
+    }
+
+    // Insert into lead_activities
+    const { error } = await supabase
+      .from('lead_activities')
+      .insert({
+        lead_email: email.toLowerCase().trim(),
+        contact_name: payload.firstName
+          ? `${payload.firstName} ${payload.lastName || ''}`.trim()
+          : null,
+        activity_type: activityType,
+        campaign_id: campaignId,
+        campaign_name: campaignName,
+        owner,
+        activity_at: payload.timestamp || payload.date || new Date().toISOString(),
+        metadata: payload
+      });
+
+    if (error) {
+      logger.error({ error: error.message, email }, 'Failed to insert lead activity');
+      throw error;
+    }
+
+    logger.info({ email, activityType, campaignId }, 'Lead activity recorded');
+
+    return {
+      success: true,
+      email,
+      activityType,
+      campaignId
+    };
+  }
+
+  /**
    * Log webhook event to Supabase for audit trail
    *
    * @param {string} eventType - Type of event

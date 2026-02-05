@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import { ChevronUp, ChevronDown, AlertCircle, Flame, Calendar } from 'lucide-react';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useFilters } from '../../context/FilterContext';
 
@@ -48,6 +48,10 @@ export default function CampaignTable() {
       case 'replyRate':
         aVal = a.metrics?.replyRate || 0;
         bVal = b.metrics?.replyRate || 0;
+        break;
+      case 'meetingRate':
+        aVal = a.metrics?.meetingConversionRate || 0;
+        bVal = b.metrics?.meetingConversionRate || 0;
         break;
       default:
         return 0;
@@ -112,14 +116,26 @@ export default function CampaignTable() {
                 className="text-right py-3 px-2 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700"
                 onClick={() => handleSort('replyRate')}
               >
-                Reply Rate <SortIcon field="replyRate" />
+                Reply % <SortIcon field="replyRate" />
+              </th>
+              <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">
+                Mtgs
+              </th>
+              <th
+                className="text-right py-3 px-2 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700"
+                onClick={() => handleSort('meetingRate')}
+              >
+                Mtg % <SortIcon field="meetingRate" />
               </th>
             </tr>
           </thead>
           <tbody>
             {sortedCampaigns.map((campaign) => {
               const replyRate = campaign.metrics?.replyRate || 0;
+              const meetingRate = campaign.metrics?.meetingConversionRate || 0;
+              const meetingsBooked = campaign.metrics?.meetingsBooked || 0;
               const isLowPerforming = replyRate < 10 && campaign.metrics?.emailsSent > 0;
+              const isHighPerforming = meetingRate >= 5;
 
               return (
                 <tr
@@ -136,6 +152,9 @@ export default function CampaignTable() {
                       <span className="text-sm font-medium text-gray-900">{campaign.name}</span>
                       {isLowPerforming && (
                         <AlertCircle className="w-4 h-4 text-red-500" title="Low reply rate" />
+                      )}
+                      {isHighPerforming && (
+                        <Flame className="w-4 h-4 text-orange-500" title="High meeting conversion" />
                       )}
                     </div>
                   </td>
@@ -154,6 +173,17 @@ export default function CampaignTable() {
                   <td className="py-3 px-2 text-right">
                     <span className={`text-sm font-medium ${isLowPerforming ? 'text-red-600' : 'text-gray-900'}`}>
                       {replyRate}%
+                    </span>
+                  </td>
+                  <td className="py-3 px-2 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Calendar className="w-3 h-3 text-gray-400" />
+                      <span className="text-sm text-gray-900">{meetingsBooked}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-2 text-right">
+                    <span className={`text-sm font-medium ${isHighPerforming ? 'text-green-600' : 'text-gray-900'}`}>
+                      {meetingRate}%
                     </span>
                   </td>
                 </tr>
