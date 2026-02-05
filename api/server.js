@@ -9,9 +9,11 @@ const logger = createLogger('api-server');
 const app = express();
 const PORT = process.env.API_PORT || 3001;
 
-// Middleware
+// Middleware - CORS configuration
+// Strip trailing slashes from FRONTEND_URL to avoid mismatch
+const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '') || '*';
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
+  origin: frontendUrl,
   credentials: true
 }));
 app.use(express.json());
