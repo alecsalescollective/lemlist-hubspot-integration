@@ -214,12 +214,28 @@ class LeadPipelineService {
     }
 
     // Build lead payload
-    const leadPayload = {
+    let leadPayload = {
       email,
       firstName: props.firstname || '',
       lastName: props.lastname || '',
       companyName: props.company || ''
     };
+
+    // Enrich the lead before adding to campaign
+    logger.info({ contactId, email }, 'Enriching lead data');
+    try {
+      leadPayload = await lemlist.enrichLead(leadPayload, {
+        maxWaitMs: 30000,
+        pollIntervalMs: 2000
+      });
+
+      if (leadPayload.enriched) {
+        logger.info({ contactId, email, enriched: true }, 'Lead enrichment completed');
+      }
+    } catch (enrichError) {
+      // Log but don't fail - continue with original data
+      logger.warn({ contactId, email, error: enrichError.message }, 'Lead enrichment failed, continuing with original data');
+    }
 
     // Add AI context fields
     for (const [lemlistVar, hubspotProp] of Object.entries(routingConfig.ai_context_fields || {})) {
@@ -229,13 +245,10 @@ class LeadPipelineService {
     }
 
     // Add lead to Lemlist campaign
-    await lemlist.client.post(`/campaigns/${campaignId}/leads/${encodeURIComponent(email)}`, leadPayload);
+    await lemlist.addLeadToCampaign(campaignId, leadPayload);
 
-    // Mark as processed
+    // Mark as processed in Supabase (this prevents re-processing since we can't clear HubSpot trigger)
     await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source);
-
-    // Clear the trigger field in HubSpot
-    await this.clearTriggerField(contactId);
 
     logger.info({ contactId, email, campaignId }, 'Lead added to Lemlist campaign');
 
@@ -297,24 +310,6 @@ class LeadPipelineService {
       lead_source: leadSource || 'trigger',
       processed_at: new Date().toISOString()
     }, { onConflict: 'hubspot_contact_id' });
-  }
-
-  /**
-   * Clear the trigger field in HubSpot after processing
-   */
-  async clearTriggerField(contactId) {
-    const { hubspot } = getClients();
-
-    try {
-      await hubspot.client.patch(`/crm/v3/objects/contacts/${contactId}`, {
-        properties: {
-          [routingConfig.trigger_field]: 'false'
-        }
-      });
-    } catch (error) {
-      // Log but don't fail - lead is already added
-      logger.warn({ contactId, error: error.message }, 'Failed to clear trigger field');
-    }
   }
 
   /**

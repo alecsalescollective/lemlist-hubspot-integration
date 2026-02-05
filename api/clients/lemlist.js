@@ -63,6 +63,144 @@ class LemlistClient {
     const response = await this.client.patch(`/leads/${encodeURIComponent(leadIdOrEmail)}`, data);
     return response.data;
   }
+
+  /**
+   * Add a lead to a campaign
+   * @param {string} campaignId - Campaign ID
+   * @param {Object} leadData - Lead data
+   * @returns {Promise<Object>} - Created lead
+   */
+  async addLeadToCampaign(campaignId, leadData) {
+    const response = await this.client.post(
+      `/campaigns/${campaignId}/leads/${encodeURIComponent(leadData.email)}`,
+      leadData
+    );
+    return response.data;
+  }
+
+  /**
+   * Check if a lead exists in a campaign
+   * @param {string} campaignId - Campaign ID
+   * @param {string} email - Lead email
+   * @returns {Promise<Object|null>} - Lead or null
+   */
+  async checkLeadExists(campaignId, email) {
+    try {
+      const response = await this.client.get(
+        `/campaigns/${campaignId}/leads/${encodeURIComponent(email)}`
+      );
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Submit a lead for enrichment
+   * @param {Object} params - Enrichment parameters
+   * @returns {Promise<Object>} - Enrichment job with ID
+   */
+  async submitEnrichment(params) {
+    const queryParams = {
+      email: params.email,
+      verifyEmail: true,
+      linkedinEnrichment: true
+    };
+
+    if (params.firstName) queryParams.firstName = params.firstName;
+    if (params.lastName) queryParams.lastName = params.lastName;
+    if (params.companyName) queryParams.companyName = params.companyName;
+
+    const response = await this.client.post('/enrich', null, { params: queryParams });
+    return response.data;
+  }
+
+  /**
+   * Get enrichment result by ID
+   * @param {string} enrichmentId - Enrichment job ID
+   * @returns {Promise<Object>} - Enrichment result
+   */
+  async getEnrichmentResult(enrichmentId) {
+    const response = await this.client.get(`/enrich/${enrichmentId}`);
+    return response.data;
+  }
+
+  /**
+   * Enrich a lead and wait for results
+   * @param {Object} leadData - Lead data to enrich
+   * @param {Object} options - Options (maxWaitMs, pollIntervalMs)
+   * @returns {Promise<Object>} - Enriched lead data
+   */
+  async enrichLead(leadData, options = {}) {
+    const maxWaitMs = options.maxWaitMs || 30000;
+    const pollIntervalMs = options.pollIntervalMs || 2000;
+
+    // Submit enrichment request
+    const enrichmentJob = await this.submitEnrichment({
+      email: leadData.email,
+      firstName: leadData.firstName,
+      lastName: leadData.lastName,
+      companyName: leadData.companyName
+    });
+
+    if (!enrichmentJob?.id) {
+      return leadData; // Return original if no enrichment ID
+    }
+
+    const enrichmentId = enrichmentJob.id;
+    const startTime = Date.now();
+
+    // Poll for results
+    while (Date.now() - startTime < maxWaitMs) {
+      await this.sleep(pollIntervalMs);
+
+      try {
+        const result = await this.getEnrichmentResult(enrichmentId);
+        const status = result.enrichmentStatus || result.status;
+
+        if (status === 'done' || status === 'completed') {
+          return this.mergeEnrichedData(leadData, result);
+        }
+
+        if (status === 'failed' || status === 'error') {
+          return leadData; // Return original on failure
+        }
+      } catch (error) {
+        // Continue polling on error
+      }
+    }
+
+    return leadData; // Return original on timeout
+  }
+
+  /**
+   * Merge enriched data with original lead data
+   */
+  mergeEnrichedData(originalData, enrichedResult) {
+    const merged = { ...originalData };
+
+    const linkedinData = enrichedResult.data?.linkedin || {};
+    const phoneData = enrichedResult.data?.phone || {};
+
+    if (linkedinData.firstName && !merged.firstName) merged.firstName = linkedinData.firstName;
+    if (linkedinData.lastName && !merged.lastName) merged.lastName = linkedinData.lastName;
+    if (linkedinData.companyName && !merged.companyName) merged.companyName = linkedinData.companyName;
+    if (linkedinData.linkedinUrl) merged.linkedinUrl = linkedinData.linkedinUrl;
+    if (linkedinData.jobTitle) merged.jobTitle = linkedinData.jobTitle;
+    if (phoneData.phone) merged.phone = phoneData.phone;
+
+    merged.enriched = true;
+    merged.enrichedAt = new Date().toISOString();
+
+    return merged;
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 }
 
 module.exports = LemlistClient;
