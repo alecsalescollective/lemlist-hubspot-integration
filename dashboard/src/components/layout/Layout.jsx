@@ -1,6 +1,5 @@
 import Header from './Header';
 import { SkipLink, LoadingBar } from '../ui';
-import { layout } from '../../styles/designTokens';
 
 export default function Layout({ children }) {
   return (
@@ -14,10 +13,10 @@ export default function Layout({ children }) {
       {/* Header with navigation and filters */}
       <Header />
 
-      {/* Main content area */}
+      {/* Main content area - responsive padding */}
       <main
         id="main-content"
-        className={`${layout.mainPadding} focus:outline-none`}
+        className="p-4 sm:p-6 lg:p-8 focus:outline-none"
         tabIndex={-1}
       >
         {children}

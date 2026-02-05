@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FilterProvider } from './context/FilterContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './components/ui';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/layout/Layout';
 import FunnelChart from './components/dashboard/FunnelChart';
@@ -51,9 +52,11 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <FilterProvider>
-            <Dashboard />
-          </FilterProvider>
+          <ToastProvider>
+            <FilterProvider>
+              <Dashboard />
+            </FilterProvider>
+          </ToastProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>

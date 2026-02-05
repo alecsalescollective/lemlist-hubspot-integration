@@ -6,7 +6,6 @@ import { useFilters } from '../../context/FilterContext';
 import { EmptyState, ErrorState, SkeletonChart } from '../ui';
 import {
   typography,
-  spacing,
   card,
   chartConfig,
   colors,
@@ -22,12 +21,12 @@ export default function LeadOverview() {
   // Loading state
   if (isLoading) {
     return (
-      <div className={`${card.base} ${spacing.cardPadding}`}>
-        <h2 className={`${typography.cardTitle} mb-6`}>Lead Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <SkeletonChart height="h-48" />
-          <SkeletonChart height="h-48" />
-          <SkeletonChart height="h-48" />
+      <div className={`${card.base} p-4 sm:p-6 lg:p-8`}>
+        <h2 className={`${typography.cardTitle} mb-4 sm:mb-6`}>Lead Overview</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <SkeletonChart height="h-32 sm:h-40 lg:h-48" />
+          <SkeletonChart height="h-32 sm:h-40 lg:h-48" />
+          <SkeletonChart height="h-32 sm:h-40 lg:h-48" />
         </div>
       </div>
     );
@@ -36,7 +35,7 @@ export default function LeadOverview() {
   // Error state
   if (error) {
     return (
-      <div className={`${card.base} ${spacing.cardPadding}`}>
+      <div className={`${card.base} p-4 sm:p-6 lg:p-8`}>
         <h2 className={`${typography.cardTitle} mb-4`}>Lead Overview</h2>
         <ErrorState
           title="Error loading lead data"
@@ -74,7 +73,7 @@ export default function LeadOverview() {
   // Empty state
   if (!hasData) {
     return (
-      <div className={`${card.base} ${spacing.cardPadding}`}>
+      <div className={`${card.base} p-4 sm:p-6 lg:p-8`}>
         <h2 className={`${typography.cardTitle} mb-4`}>Lead Overview</h2>
         <EmptyState
           icon={Users}
@@ -94,22 +93,22 @@ export default function LeadOverview() {
   };
 
   return (
-    <div className={`${card.base} ${spacing.cardPadding}`}>
-      <h2 className={`${typography.cardTitle} mb-8`}>Lead Overview</h2>
+    <div className={`${card.base} p-4 sm:p-6 lg:p-8`}>
+      <h2 className={`${typography.cardTitle} mb-4 sm:mb-6 lg:mb-8`}>Lead Overview</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* By Owner */}
         <div>
-          <h3 className={`${typography.tableHeader} mb-4`}>By Owner</h3>
-          <div className="h-48" role="img" aria-label="Leads by owner chart">
+          <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Owner</h3>
+          <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by owner chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ownerData} layout="vertical">
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={60}
-                  tick={chartConfig.axis.tickStyle}
+                  width={50}
+                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -126,16 +125,16 @@ export default function LeadOverview() {
 
         {/* By Status */}
         <div>
-          <h3 className={`${typography.tableHeader} mb-4`}>By Status</h3>
-          <div className="h-48" role="img" aria-label="Leads by status chart">
+          <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Status</h3>
+          <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by status chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData} layout="vertical">
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={80}
-                  tick={chartConfig.axis.tickStyle}
+                  width={70}
+                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -151,17 +150,17 @@ export default function LeadOverview() {
         </div>
 
         {/* By Source */}
-        <div>
-          <h3 className={`${typography.tableHeader} mb-4`}>By Source</h3>
-          <div className="h-48" role="img" aria-label="Leads by source chart">
+        <div className="sm:col-span-2 lg:col-span-1">
+          <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Source</h3>
+          <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by source chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sourceData} layout="vertical">
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={80}
-                  tick={chartConfig.axis.tickStyle}
+                  width={70}
+                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />

@@ -1,12 +1,11 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, ArrowRight, ArrowDown, Activity, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight, ArrowDown, Activity } from 'lucide-react';
 import { useFunnelStats } from '../../hooks/useFunnel';
 import { useTriggerSync } from '../../hooks/useSync';
 import { useFilters } from '../../context/FilterContext';
-import { EmptyState, ErrorState, SkeletonFunnel } from '../ui';
+import { EmptyState, ErrorState, SkeletonFunnel, PerformanceBadge } from '../ui';
 import {
   typography,
-  spacing,
   card,
   chartConfig,
   interactive,
@@ -21,8 +20,8 @@ export default function FunnelChart() {
   // Loading state with skeleton
   if (isLoading) {
     return (
-      <div className={`${card.base} ${spacing.cardPadding} ${spacing.sectionMargin}`}>
-        <h2 className={`${typography.pageTitle} mb-6`}>Sales Funnel</h2>
+      <div className={`${card.base} p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8`}>
+        <h2 className={`${typography.pageTitle} mb-4 sm:mb-6`}>Sales Funnel</h2>
         <SkeletonFunnel stages={3} />
       </div>
     );
@@ -31,7 +30,7 @@ export default function FunnelChart() {
   // Error state with retry
   if (error) {
     return (
-      <div className={`${card.base} ${spacing.cardPadding} ${spacing.sectionMargin}`}>
+      <div className={`${card.base} p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8`}>
         <h2 className={`${typography.pageTitle} mb-4`}>Sales Funnel</h2>
         <ErrorState
           title="Error loading funnel data"
@@ -49,7 +48,7 @@ export default function FunnelChart() {
   // Empty state with action
   if (stages.length === 0) {
     return (
-      <div className={`${card.base} ${spacing.cardPadding} ${spacing.sectionMargin}`}>
+      <div className={`${card.base} p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8`}>
         <h2 className={`${typography.pageTitle} mb-4`}>Sales Funnel</h2>
         <EmptyState
           icon={Activity}
@@ -69,16 +68,24 @@ export default function FunnelChart() {
     percentage: Math.round((stage.count / maxCount) * 100),
   }));
 
+  const leadToMeetingRate = conversions.leadToMeeting || 0;
+
   return (
-    <div className={`${card.base} ${spacing.cardPadding} ${spacing.sectionMargin}`}>
+    <div className={`${card.base} p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8`}>
       {/* Header with title and conversion rate */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-6 sm:mb-8">
         <h2 className={typography.pageTitle}>Sales Funnel</h2>
-        <div className="flex items-center gap-3">
-          <span className={typography.label}>Lead to Meeting:</span>
-          <span className="font-bold text-xl text-gray-900 dark:text-gray-100">
-            {conversions.leadToMeeting || 0}%
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <span className={`${typography.label} hidden sm:inline`}>Lead to Meeting:</span>
+          <span className="font-bold text-lg sm:text-xl text-gray-900 dark:text-gray-100">
+            {leadToMeetingRate}%
           </span>
+          <PerformanceBadge
+            value={leadToMeetingRate}
+            metricType="conversionRate"
+            size="sm"
+            showLabel
+          />
           {trend !== 0 && (
             <span
               className={`flex items-center text-sm ${
@@ -102,7 +109,7 @@ export default function FunnelChart() {
 
       {/* Funnel Visualization - Desktop */}
       <div
-        className="hidden md:flex items-center justify-center gap-4 mb-8"
+        className="hidden md:flex items-center justify-center gap-4 mb-6 lg:mb-8"
         role="img"
         aria-label={`Sales funnel showing ${chartData.map((s) => `${s.name}: ${s.count}`).join(', ')}`}
       >
@@ -111,14 +118,14 @@ export default function FunnelChart() {
             {/* Stage Box */}
             <div className="text-center">
               <div
-                className={`rounded-lg px-8 py-5 min-w-[180px] ${interactive.transition}`}
+                className={`rounded-lg px-6 lg:px-8 py-4 lg:py-5 min-w-[150px] lg:min-w-[180px] ${interactive.transition}`}
                 style={{
                   backgroundColor: `${stage.color}15`,
                   borderLeft: `4px solid ${stage.color}`,
                 }}
               >
                 <div
-                  className="text-3xl font-bold"
+                  className="text-2xl lg:text-3xl font-bold"
                   style={{ color: stage.color }}
                 >
                   {stage.count.toLocaleString()}
@@ -131,7 +138,7 @@ export default function FunnelChart() {
 
             {/* Arrow with conversion rate */}
             {index < chartData.length - 1 && (
-              <div className="flex flex-col items-center mx-4">
+              <div className="flex flex-col items-center mx-2 lg:mx-4">
                 <ArrowRight
                   className={`${iconSizes.lg} text-gray-400 dark:text-gray-500`}
                   aria-hidden="true"
@@ -150,7 +157,7 @@ export default function FunnelChart() {
 
       {/* Funnel Visualization - Mobile (stacked) */}
       <div
-        className="flex md:hidden flex-col items-center gap-3 mb-8"
+        className="flex md:hidden flex-col items-center gap-2 mb-6"
         role="img"
         aria-label={`Sales funnel showing ${chartData.map((s) => `${s.name}: ${s.count}`).join(', ')}`}
       >
@@ -158,31 +165,33 @@ export default function FunnelChart() {
           <div key={stage.name} className="flex flex-col items-center w-full">
             {/* Stage Box */}
             <div
-              className={`rounded-lg px-6 py-4 w-full ${interactive.transition}`}
+              className={`rounded-lg px-4 py-3 w-full ${interactive.transition}`}
               style={{
                 backgroundColor: `${stage.color}15`,
                 borderLeft: `4px solid ${stage.color}`,
               }}
             >
-              <div
-                className="text-2xl font-bold"
-                style={{ color: stage.color }}
-              >
-                {stage.count.toLocaleString()}
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 font-medium">
-                {stage.name}
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+                  {stage.name}
+                </div>
+                <div
+                  className="text-xl font-bold"
+                  style={{ color: stage.color }}
+                >
+                  {stage.count.toLocaleString()}
+                </div>
               </div>
             </div>
 
             {/* Arrow with conversion rate */}
             {index < chartData.length - 1 && (
-              <div className="flex items-center gap-2 my-2">
+              <div className="flex items-center gap-2 my-1">
                 <ArrowDown
-                  className={`${iconSizes.md} text-gray-400 dark:text-gray-500`}
+                  className={`${iconSizes.sm} text-gray-400 dark:text-gray-500`}
                   aria-hidden="true"
                 />
-                <span className={typography.small}>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   {index === 0
                     ? conversions.leadToSequence
                     : conversions.sequenceToMeeting}
@@ -194,8 +203,8 @@ export default function FunnelChart() {
         ))}
       </div>
 
-      {/* Bar Chart Representation */}
-      <div className="h-20 mt-6" aria-hidden="true">
+      {/* Bar Chart Representation - hidden on mobile for cleaner look */}
+      <div className="hidden sm:block h-16 lg:h-20 mt-4 lg:mt-6" aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} layout="vertical" barGap={0}>
             <XAxis type="number" hide domain={[0, maxCount]} />
@@ -205,7 +214,7 @@ export default function FunnelChart() {
               contentStyle={chartConfig.tooltip.contentStyle}
               cursor={chartConfig.tooltip.cursor}
             />
-            <Bar dataKey="count" radius={chartConfig.barRadius} barSize={20}>
+            <Bar dataKey="count" radius={chartConfig.barRadius} barSize={16}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
@@ -213,32 +222,39 @@ export default function FunnelChart() {
                 dataKey="name"
                 position="insideLeft"
                 fill="#fff"
-                fontSize={11}
+                fontSize={10}
               />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Conversion Summary */}
-      <div className="grid grid-cols-3 gap-6 mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+      {/* Conversion Summary - responsive grid */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-6 mt-4 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-100 dark:border-gray-700">
         <div className="text-center">
-          <div className={typography.tableHeader}>Lead to Sequence</div>
-          <div className={`${typography.cardMetric} mt-2`}>
+          <div className="text-xs sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <span className="hidden sm:inline">Lead to Sequence</span>
+            <span className="sm:hidden">Lead→Seq</span>
+          </div>
+          <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1 sm:mt-2">
             {conversions.leadToSequence || 0}%
           </div>
         </div>
         <div className="text-center">
-          <div className={typography.tableHeader}>Sequence to Meeting</div>
-          <div className={`${typography.cardMetric} mt-2`}>
+          <div className="text-xs sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <span className="hidden sm:inline">Sequence to Meeting</span>
+            <span className="sm:hidden">Seq→Mtg</span>
+          </div>
+          <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1 sm:mt-2">
             {conversions.sequenceToMeeting || 0}%
           </div>
         </div>
         <div className="text-center">
-          <div className={typography.tableHeader}>Overall Conversion</div>
-          <div
-            className={`${typography.cardMetric} text-green-600 dark:text-green-400 mt-2`}
-          >
+          <div className="text-xs sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <span className="hidden sm:inline">Overall Conversion</span>
+            <span className="sm:hidden">Overall</span>
+          </div>
+          <div className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400 mt-1 sm:mt-2">
             {conversions.leadToMeeting || 0}%
           </div>
         </div>

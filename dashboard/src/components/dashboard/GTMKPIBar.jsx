@@ -4,7 +4,6 @@ import { useLeadsSummary } from '../../hooks/useLeads';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useFilters } from '../../context/FilterContext';
 import KPICard from './KPICard';
-import { layout, spacing } from '../../styles/designTokens';
 
 export default function GTMKPIBar() {
   const { owner, dateRange } = useFilters();
@@ -43,7 +42,7 @@ export default function GTMKPIBar() {
 
   return (
     <div
-      className={`${layout.grid4} ${spacing.cardGap} ${spacing.sectionMargin}`}
+      className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8"
       role="region"
       aria-label="Key Performance Indicators"
     >
@@ -55,6 +54,8 @@ export default function GTMKPIBar() {
         icon={Target}
         loading={loading}
         highlight="primary"
+        metricType="conversionRate"
+        benchmark="Industry avg: 6-10%"
       />
 
       {/* Secondary KPI - Total Replies */}
@@ -73,6 +74,8 @@ export default function GTMKPIBar() {
         icon={Percent}
         loading={loading}
         highlight="none"
+        metricType="replyRate"
+        benchmark="Industry avg: 8-12%"
       />
 
       {/* Standard KPI - In Sequence Count */}

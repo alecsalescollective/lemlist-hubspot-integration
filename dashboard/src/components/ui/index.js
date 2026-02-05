@@ -26,3 +26,15 @@ export {
 
 // Navigation components
 export { default as SkipLink } from './SkipLink';
+
+// Feedback components
+export { default as Toast, ToastProvider, useToast } from './Toast';
+
+// Performance components
+export {
+  default as PerformanceBadge,
+  PerformanceIndicator,
+  getPerformanceLevel,
+  getBenchmarkText,
+  thresholds,
+} from './PerformanceBadge';
