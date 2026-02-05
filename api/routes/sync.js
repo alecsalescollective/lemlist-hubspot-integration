@@ -62,12 +62,16 @@ router.get('/debug', async (req, res) => {
 });
 
 /**
- * GET /api/sync/debug-contact/:email
+ * GET /api/sync/debug-contact?email=someone@example.com
  * Debug: Look up a specific contact by email
  */
-router.get('/debug-contact/:email', async (req, res) => {
+router.get('/debug-contact', async (req, res) => {
   const token = process.env.HUBSPOT_ACCESS_TOKEN;
-  const email = req.params.email;
+  const email = req.query.email;
+
+  if (!email) {
+    return res.json({ error: 'Email query parameter required. Use ?email=someone@example.com' });
+  }
 
   try {
     // Search for specific contact by email
