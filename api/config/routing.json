@@ -1,6 +1,6 @@
 {
   "trigger_field": "add_to_lemlist",
-  "trigger_value": "true",
+  "trigger_value": "Yes",
   "owners": {
     "161405486": "alec",
     "228077638": "janae",
