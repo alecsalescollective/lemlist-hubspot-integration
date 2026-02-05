@@ -1,19 +1,59 @@
 @import "tailwindcss";
 
+/* Dark mode selector - class-based for ThemeContext control */
+@variant dark (&:where(.dark, .dark *));
+
 /* Custom color variables matching PRD design system */
 :root {
   --color-primary: #3B82F6;
   --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
+
+  /* Light mode backgrounds */
+  --color-bg-primary: #F9FAFB;
+  --color-bg-secondary: #FFFFFF;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+}
+
+.dark {
+  /* Dark mode backgrounds */
+  --color-bg-primary: #111827;
+  --color-bg-secondary: #1F2937;
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #9CA3AF;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #F9FAFB;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Smooth transitions for theme switching */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-timing-function: ease;
+  transition-duration: 0.15s;
+}
+
+/* Skip link styling */
+.skip-link:focus {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-primary);
+  color: white;
+  border-radius: 0.5rem;
+  outline: 2px solid white;
+  outline-offset: 2px;
 }

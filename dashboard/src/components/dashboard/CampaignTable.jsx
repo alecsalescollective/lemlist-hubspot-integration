@@ -1,20 +1,22 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, AlertCircle, Flame, Calendar } from 'lucide-react';
+import { ChevronUp, ChevronDown, AlertCircle, Flame, Calendar, BarChart2 } from 'lucide-react';
 import { useCampaigns } from '../../hooks/useCampaigns';
+import { useTriggerSync } from '../../hooks/useSync';
 import { useFilters } from '../../context/FilterContext';
+import { EmptyState, ErrorState, SkeletonTable, Badge, getStatusVariant } from '../ui';
 import {
   typography,
   spacing,
   card,
-  interactive,
+  table,
   iconSizes,
-  statusColors,
-  getStatusColors
+  cn,
 } from '../../styles/designTokens';
 
 export default function CampaignTable() {
   const { owner } = useFilters();
-  const { data, isLoading } = useCampaigns(owner);
+  const { data, isLoading, error, refetch } = useCampaigns(owner);
+  const triggerSync = useTriggerSync();
   const [sortField, setSortField] = useState('replyRate');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -27,15 +29,34 @@ export default function CampaignTable() {
     }
   };
 
+  // Handle keyboard navigation for sorting
+  const handleSortKeyDown = (e, field) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSort(field);
+    }
+  };
+
+  // Loading state
   if (isLoading) {
     return (
       <div className={`${card.base} ${spacing.cardPadding}`}>
         <h2 className={`${typography.cardTitle} mb-4`}>Campaign Performance</h2>
-        <div className="animate-pulse space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-12 bg-gray-200 rounded"></div>
-          ))}
-        </div>
+        <SkeletonTable rows={5} />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className={`${card.base} ${spacing.cardPadding}`}>
+        <h2 className={`${typography.cardTitle} mb-4`}>Campaign Performance</h2>
+        <ErrorState
+          title="Error loading campaigns"
+          message={error.message}
+          onRetry={refetch}
+        />
       </div>
     );
   }
@@ -71,146 +92,198 @@ export default function CampaignTable() {
     return aVal < bVal ? 1 : -1;
   });
 
+  // Sort indicator component
   const SortIcon = ({ field }) => {
     if (sortField !== field) return null;
     return sortDir === 'asc' ? (
-      <ChevronUp className={`${iconSizes.sm} inline ml-1`} />
+      <ChevronUp className={`${iconSizes.sm} inline ml-1`} aria-hidden="true" />
     ) : (
-      <ChevronDown className={`${iconSizes.sm} inline ml-1`} />
+      <ChevronDown className={`${iconSizes.sm} inline ml-1`} aria-hidden="true" />
     );
   };
 
-  const getStatusClasses = (status) => {
-    const colors = getStatusColors(status);
-    return `${colors.bg} ${colors.text}`;
+  // Get header cell classes with sort state
+  const getHeaderClasses = (field, align = 'left') => {
+    const baseClass = align === 'right' ? table.headerCellRight : table.headerCell;
+    const sortable = table.headerCellSortable;
+    const sorted = sortField === field ? table.headerCellSorted : '';
+    return cn(baseClass, sortable, sorted);
   };
-
-  // Header cell base styling
-  const headerCell = `py-3 px-3 ${typography.tableHeader}`;
-  const headerCellSortable = `${headerCell} cursor-pointer hover:text-gray-700 ${interactive.focusRing} outline-none`;
 
   return (
     <div className={`${card.base} ${spacing.cardPadding}`}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className={typography.cardTitle}>Campaign Performance</h2>
         <span className={typography.label}>{campaigns.length} campaigns</span>
       </div>
 
-      <div className="overflow-x-auto -mx-8 px-8">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200">
-              <th className={`text-left ${headerCell}`}>Status</th>
-              <th
-                className={`text-left ${headerCellSortable}`}
-                onClick={() => handleSort('name')}
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
-              >
-                Campaign<SortIcon field="name" />
-              </th>
-              <th className={`text-left ${headerCell}`}>Owner</th>
-              <th
-                className={`text-right ${headerCellSortable}`}
-                onClick={() => handleSort('leadsCount')}
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleSort('leadsCount')}
-              >
-                Leads<SortIcon field="leadsCount" />
-              </th>
-              <th className={`text-right ${headerCell}`}>Sent</th>
-              <th className={`text-right ${headerCell}`}>Opens</th>
-              <th
-                className={`text-right ${headerCellSortable}`}
-                onClick={() => handleSort('replyRate')}
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleSort('replyRate')}
-              >
-                Reply %<SortIcon field="replyRate" />
-              </th>
-              <th className={`text-right ${headerCell}`}>
-                Meetings
-              </th>
-              <th
-                className={`text-right ${headerCellSortable}`}
-                onClick={() => handleSort('meetingRate')}
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleSort('meetingRate')}
-              >
-                Meeting %<SortIcon field="meetingRate" />
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedCampaigns.map((campaign) => {
-              const replyRate = campaign.metrics?.replyRate || 0;
-              const meetingRate = campaign.metrics?.meetingConversionRate || 0;
-              const meetingsBooked = campaign.metrics?.meetingsBooked || 0;
-              const isLowPerforming = replyRate < 10 && campaign.metrics?.emailsSent > 0;
-              const isHighPerforming = meetingRate >= 5;
-
-              return (
-                <tr
-                  key={campaign.id}
-                  className={`border-b border-gray-100 ${interactive.rowHover}`}
+      {/* Empty state */}
+      {campaigns.length === 0 ? (
+        <EmptyState
+          icon={BarChart2}
+          title="No campaigns found"
+          description="Sync your campaigns from Lemlist to see performance data and metrics."
+          action="Sync Campaigns"
+          onAction={() => triggerSync.mutate('campaigns')}
+        />
+      ) : (
+        /* Table */
+        <div className={table.container}>
+          <table className={table.wrapper} role="grid" aria-label="Campaign performance data">
+            <thead className={table.headerSticky}>
+              <tr className={table.headerRow}>
+                <th scope="col" className={table.headerCell}>
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className={getHeaderClasses('name')}
+                  onClick={() => handleSort('name')}
+                  onKeyDown={(e) => handleSortKeyDown(e, 'name')}
+                  tabIndex={0}
+                  role="columnheader"
+                  aria-sort={sortField === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
-                  <td className="py-3 px-3">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusClasses(campaign.status)}`}>
-                      {campaign.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <div className="flex items-center gap-2">
-                      <span className={typography.tableBody}>{campaign.name}</span>
-                      {isLowPerforming && (
-                        <AlertCircle className={`${iconSizes.sm} text-red-500`} title="Low reply rate" />
-                      )}
-                      {isHighPerforming && (
-                        <Flame className={`${iconSizes.sm} text-orange-500`} title="High meeting conversion" />
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-sm text-gray-600 capitalize">
-                    {campaign.owner || '-'}
-                  </td>
-                  <td className={`py-3 px-3 text-right ${typography.bodyMetric}`}>
-                    {campaign.metrics?.leadsCount || 0}
-                  </td>
-                  <td className="py-3 px-3 text-sm text-gray-600 text-right">
-                    {campaign.metrics?.emailsSent || 0}
-                  </td>
-                  <td className="py-3 px-3 text-sm text-gray-600 text-right">
-                    {campaign.metrics?.emailsOpened || 0}
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <span className={`${typography.bodyMetric} ${isLowPerforming ? 'text-red-600' : ''}`}>
-                      {replyRate}%
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Calendar className={`${iconSizes.sm} text-gray-400`} />
-                      <span className={typography.bodyMetric}>{meetingsBooked}</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <span className={`${typography.bodyMetric} ${isHighPerforming ? 'text-green-600' : ''}`}>
-                      {meetingRate}%
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  Campaign
+                  <SortIcon field="name" />
+                </th>
+                <th scope="col" className={table.headerCell}>
+                  Owner
+                </th>
+                <th
+                  scope="col"
+                  className={getHeaderClasses('leadsCount', 'right')}
+                  onClick={() => handleSort('leadsCount')}
+                  onKeyDown={(e) => handleSortKeyDown(e, 'leadsCount')}
+                  tabIndex={0}
+                  role="columnheader"
+                  aria-sort={sortField === 'leadsCount' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                >
+                  Leads
+                  <SortIcon field="leadsCount" />
+                </th>
+                <th scope="col" className={table.headerCellRight}>
+                  Sent
+                </th>
+                <th scope="col" className={table.headerCellRight}>
+                  Opens
+                </th>
+                <th
+                  scope="col"
+                  className={getHeaderClasses('replyRate', 'right')}
+                  onClick={() => handleSort('replyRate')}
+                  onKeyDown={(e) => handleSortKeyDown(e, 'replyRate')}
+                  tabIndex={0}
+                  role="columnheader"
+                  aria-sort={sortField === 'replyRate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                >
+                  Reply %
+                  <SortIcon field="replyRate" />
+                </th>
+                <th scope="col" className={table.headerCellRight}>
+                  Meetings
+                </th>
+                <th
+                  scope="col"
+                  className={getHeaderClasses('meetingRate', 'right')}
+                  onClick={() => handleSort('meetingRate')}
+                  onKeyDown={(e) => handleSortKeyDown(e, 'meetingRate')}
+                  tabIndex={0}
+                  role="columnheader"
+                  aria-sort={sortField === 'meetingRate' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                >
+                  Meeting %
+                  <SortIcon field="meetingRate" />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedCampaigns.map((campaign) => {
+                const replyRate = campaign.metrics?.replyRate || 0;
+                const meetingRate = campaign.metrics?.meetingConversionRate || 0;
+                const meetingsBooked = campaign.metrics?.meetingsBooked || 0;
+                const isLowPerforming = replyRate < 10 && campaign.metrics?.emailsSent > 0;
+                const isHighPerforming = meetingRate >= 5;
 
-        {campaigns.length === 0 && (
-          <div className="text-center py-12">
-            <p className="font-medium text-gray-900">No campaigns found</p>
-            <p className={`${typography.label} mt-2`}>Trigger a sync to load data</p>
-          </div>
-        )}
-      </div>
+                return (
+                  <tr key={campaign.id} className={table.bodyRow}>
+                    <td className={table.bodyCell}>
+                      <Badge variant={getStatusVariant(campaign.status)}>
+                        {campaign.status}
+                      </Badge>
+                    </td>
+                    <td className={table.bodyCell}>
+                      <div className="flex items-center gap-2">
+                        <span className={typography.tableBody}>{campaign.name}</span>
+                        {isLowPerforming && (
+                          <span title="Low reply rate" aria-label="Warning: Low reply rate">
+                            <AlertCircle
+                              className={`${iconSizes.sm} text-red-500 dark:text-red-400`}
+                              aria-hidden="true"
+                            />
+                          </span>
+                        )}
+                        {isHighPerforming && (
+                          <span title="High meeting conversion" aria-label="High meeting conversion rate">
+                            <Flame
+                              className={`${iconSizes.sm} text-orange-500 dark:text-orange-400`}
+                              aria-hidden="true"
+                            />
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className={`${table.bodyCellSecondary} capitalize`}>
+                      {campaign.owner || '-'}
+                    </td>
+                    <td className={table.bodyCellRight}>
+                      {campaign.metrics?.leadsCount || 0}
+                    </td>
+                    <td className={table.bodyCellSecondary} style={{ textAlign: 'right' }}>
+                      {campaign.metrics?.emailsSent || 0}
+                    </td>
+                    <td className={table.bodyCellSecondary} style={{ textAlign: 'right' }}>
+                      {campaign.metrics?.emailsOpened || 0}
+                    </td>
+                    <td className={table.bodyCellRight}>
+                      <span
+                        className={
+                          isLowPerforming
+                            ? 'text-red-600 dark:text-red-400 font-medium'
+                            : ''
+                        }
+                      >
+                        {replyRate}%
+                      </span>
+                    </td>
+                    <td className={table.bodyCellRight}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Calendar
+                          className={`${iconSizes.sm} text-gray-400 dark:text-gray-500`}
+                          aria-hidden="true"
+                        />
+                        <span>{meetingsBooked}</span>
+                      </div>
+                    </td>
+                    <td className={table.bodyCellRight}>
+                      <span
+                        className={
+                          isHighPerforming
+                            ? 'text-green-600 dark:text-green-400 font-medium'
+                            : ''
+                        }
+                      >
+                        {meetingRate}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

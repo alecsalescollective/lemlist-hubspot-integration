@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FilterProvider } from './context/FilterContext';
+import { ThemeProvider } from './context/ThemeContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/layout/Layout';
 import FunnelChart from './components/dashboard/FunnelChart';
 import GTMKPIBar from './components/dashboard/GTMKPIBar';
@@ -7,16 +9,17 @@ import LeadOverview from './components/dashboard/LeadOverview';
 import CampaignTable from './components/dashboard/CampaignTable';
 import LeadActivityFeed from './components/dashboard/LeadActivityFeed';
 import MeetingsBooked from './components/dashboard/MeetingsBooked';
-import { spacing } from './styles/designTokens';
+import { layout } from './styles/designTokens';
 
-// Create a client
+// Create React Query client with optimized defaults
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1
-    }
-  }
+      retry: 1,
+      staleTime: 30000, // 30 seconds
+    },
+  },
 });
 
 function Dashboard() {
@@ -28,21 +31,15 @@ function Dashboard() {
       {/* GTM KPI Cards */}
       <GTMKPIBar />
 
-      {/* Main Grid */}
-      <div className={`grid grid-cols-1 lg:grid-cols-2 ${spacing.sectionGap} mb-8`}>
-        {/* Campaign Performance */}
+      {/* Main Grid - Campaign Performance + Lead Overview */}
+      <div className={`${layout.grid2} ${layout.sectionGap} ${layout.sectionMargin}`}>
         <CampaignTable />
-
-        {/* Lead Overview */}
         <LeadOverview />
       </div>
 
-      {/* Bottom Grid */}
-      <div className={`grid grid-cols-1 lg:grid-cols-2 ${spacing.sectionGap}`}>
-        {/* Lead Activity Feed */}
+      {/* Bottom Grid - Activity Feed + Meetings */}
+      <div className={`${layout.grid2} ${layout.sectionGap}`}>
         <LeadActivityFeed />
-
-        {/* Meetings Booked */}
         <MeetingsBooked />
       </div>
     </Layout>
@@ -51,11 +48,15 @@ function Dashboard() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <FilterProvider>
-        <Dashboard />
-      </FilterProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <FilterProvider>
+            <Dashboard />
+          </FilterProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

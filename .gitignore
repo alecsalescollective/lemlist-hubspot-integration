@@ -39,3 +39,5 @@ Thumbs.db
 
 # Database
 data/
+.vercel
+.env*.local
