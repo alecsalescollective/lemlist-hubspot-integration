@@ -62,6 +62,42 @@ router.get('/debug', async (req, res) => {
 });
 
 /**
+ * GET /api/sync/debug-contacts
+ * Debug: List recent contacts with their add_to_lemlist values
+ */
+router.get('/debug-contacts', async (req, res) => {
+  const token = process.env.HUBSPOT_ACCESS_TOKEN;
+
+  try {
+    // Get recent contacts with the trigger field
+    const response = await axios.get(
+      'https://api.hubapi.com/crm/v3/objects/contacts?limit=20&properties=email,firstname,lastname,add_to_lemlist,hubspot_owner_id',
+      {
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    res.json({
+      total: response.data.total,
+      contacts: response.data.results?.map(c => ({
+        id: c.id,
+        email: c.properties.email,
+        name: `${c.properties.firstname || ''} ${c.properties.lastname || ''}`.trim(),
+        add_to_lemlist: c.properties.add_to_lemlist,
+        ownerId: c.properties.hubspot_owner_id
+      }))
+    });
+  } catch (error) {
+    res.json({
+      error: error.response?.data || error.message
+    });
+  }
+});
+
+/**
  * GET /api/sync/debug-search
  * Debug: Test HubSpot search for triggered contacts
  */
