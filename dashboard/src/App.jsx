@@ -3,6 +3,7 @@ import { FilterProvider } from './context/FilterContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui';
 import ErrorBoundary from './components/ErrorBoundary';
+import PasswordGate from './components/PasswordGate';
 import Layout from './components/layout/Layout';
 import FunnelChart from './components/dashboard/FunnelChart';
 import GTMKPIBar from './components/dashboard/GTMKPIBar';
@@ -50,15 +51,17 @@ function Dashboard() {
 function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <ToastProvider>
-            <FilterProvider>
-              <Dashboard />
-            </FilterProvider>
-          </ToastProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
+      <ThemeProvider>
+        <PasswordGate>
+          <QueryClientProvider client={queryClient}>
+            <ToastProvider>
+              <FilterProvider>
+                <Dashboard />
+              </FilterProvider>
+            </ToastProvider>
+          </QueryClientProvider>
+        </PasswordGate>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
