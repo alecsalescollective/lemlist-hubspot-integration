@@ -20,9 +20,12 @@ router.get('/status', async (req, res, next) => {
 /**
  * GET /api/sync/debug
  * Debug endpoint to check API connectivity
+ * Optional: ?email=someone@example.com to look up specific contact
  */
 router.get('/debug', async (req, res) => {
   const token = process.env.HUBSPOT_ACCESS_TOKEN;
+  const email = req.query.email;
+
   const debugInfo = {
     hubspot: {
       tokenPresent: !!token,
@@ -55,6 +58,43 @@ router.get('/debug', async (req, res) => {
       debugInfo.hubspot.testResult = 'FAILED';
       debugInfo.hubspot.testStatus = error.response?.status;
       debugInfo.hubspot.testError = error.response?.data?.message || error.message;
+    }
+  }
+
+  // If email provided, look up that specific contact
+  if (email && token) {
+    try {
+      const searchResponse = await axios.post(
+        'https://api.hubapi.com/crm/v3/objects/contacts/search',
+        {
+          filterGroups: [{
+            filters: [{
+              propertyName: 'email',
+              operator: 'EQ',
+              value: email
+            }]
+          }],
+          properties: ['email', 'firstname', 'lastname', 'add_to_lemlist', 'hubspot_owner_id', 'lifecyclestage', 'hs_email_optout'],
+          limit: 1
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token.trim()}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (searchResponse.data.results?.length > 0) {
+        debugInfo.contactLookup = {
+          found: true,
+          contact: searchResponse.data.results[0]
+        };
+      } else {
+        debugInfo.contactLookup = { found: false, email };
+      }
+    } catch (error) {
+      debugInfo.contactLookup = { error: error.response?.data || error.message };
     }
   }
 
