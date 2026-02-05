@@ -5,7 +5,7 @@ import { useFilters } from '../../context/FilterContext';
 
 export default function FunnelChart() {
   const { owner, dateRange } = useFilters();
-  const { data, isLoading } = useFunnelStats(owner, dateRange);
+  const { data, isLoading, error } = useFunnelStats(owner, dateRange);
 
   if (isLoading) {
     return (
@@ -18,9 +18,34 @@ export default function FunnelChart() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Sales Funnel</h2>
+        <div className="text-center py-8 text-red-500">
+          <p>Error loading funnel data</p>
+          <p className="text-sm text-gray-500 mt-2">{error.message}</p>
+        </div>
+      </div>
+    );
+  }
+
   const stages = data?.stages || [];
   const conversions = data?.conversions || {};
   const trend = data?.trend?.leadToMeeting || 0;
+
+  // If no stages, show empty state
+  if (stages.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Sales Funnel</h2>
+        <div className="text-center py-8 text-gray-500">
+          <p>No funnel data available</p>
+          <p className="text-sm mt-2">Sync leads to see your funnel</p>
+        </div>
+      </div>
+    );
+  }
 
   // Prepare data for the horizontal bar chart
   const maxCount = Math.max(...stages.map(s => s.count), 1);
