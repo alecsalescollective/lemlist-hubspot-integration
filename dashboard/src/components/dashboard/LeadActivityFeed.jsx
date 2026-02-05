@@ -2,63 +2,76 @@ import { Mail, MessageSquare, MousePointer, AlertCircle, Send } from 'lucide-rea
 import { formatDistanceToNow } from 'date-fns';
 import { useLeadActivities } from '../../hooks/useLeadActivities';
 import { useFilters } from '../../context/FilterContext';
+import {
+  typography,
+  spacing,
+  card,
+  interactive,
+  iconSizes,
+  activityColors,
+  getActivityColors
+} from '../../styles/designTokens';
 
-const ACTIVITY_CONFIG = {
-  email_opened: {
-    icon: Mail,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100',
-    label: 'opened email'
-  },
-  email_replied: {
-    icon: MessageSquare,
-    color: 'text-green-600',
-    bgColor: 'bg-green-100',
-    label: 'replied'
-  },
-  email_clicked: {
-    icon: MousePointer,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-100',
-    label: 'clicked link'
-  },
-  email_bounced: {
-    icon: AlertCircle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-100',
-    label: 'bounced'
-  },
-  email_sent: {
-    icon: Send,
-    color: 'text-gray-600',
-    bgColor: 'bg-gray-100',
-    label: 'received email'
-  }
+const ACTIVITY_ICONS = {
+  email_opened: Mail,
+  emailOpened: Mail,
+  opened: Mail,
+  email_replied: MessageSquare,
+  emailReplied: MessageSquare,
+  replied: MessageSquare,
+  email_clicked: MousePointer,
+  emailClicked: MousePointer,
+  clicked: MousePointer,
+  email_bounced: AlertCircle,
+  emailBounced: AlertCircle,
+  bounced: AlertCircle,
+  email_sent: Send,
+  emailSent: Send,
+  sent: Send
+};
+
+const ACTIVITY_LABELS = {
+  email_opened: 'opened email',
+  emailOpened: 'opened email',
+  opened: 'opened email',
+  email_replied: 'replied',
+  emailReplied: 'replied',
+  replied: 'replied',
+  email_clicked: 'clicked link',
+  emailClicked: 'clicked link',
+  clicked: 'clicked link',
+  email_bounced: 'bounced',
+  emailBounced: 'bounced',
+  bounced: 'bounced',
+  email_sent: 'received email',
+  emailSent: 'received email',
+  sent: 'received email'
 };
 
 function ActivityItem({ activity }) {
-  const config = ACTIVITY_CONFIG[activity.type] || ACTIVITY_CONFIG.email_sent;
-  const Icon = config.icon;
+  const colors = getActivityColors(activity.type);
+  const Icon = ACTIVITY_ICONS[activity.type] || Send;
+  const label = ACTIVITY_LABELS[activity.type] || 'received email';
 
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 px-2 -mx-2 rounded transition-colors">
-      <div className={`p-2 rounded-lg ${config.bgColor} flex-shrink-0`}>
-        <Icon className={`w-4 h-4 ${config.color}`} />
+    <div className={`flex items-start gap-3 ${spacing.listItemPadding} border-b border-gray-100 last:border-0 ${interactive.rowHover} px-2 -mx-2 rounded ${interactive.focusBackground} outline-none`} tabIndex={0}>
+      <div className={`p-2 rounded-lg ${colors.bg} flex-shrink-0`}>
+        <Icon className={`${iconSizes.md} ${colors.icon}`} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-gray-900 truncate">
+          <span className={typography.tableBody}>
             {activity.contactName || activity.email?.split('@')[0]}
           </span>
-          <span className="text-gray-500 text-sm">{config.label}</span>
+          <span className={typography.label}>{label}</span>
         </div>
         {activity.campaign && (
-          <div className="text-xs text-gray-500 truncate mt-0.5">
+          <div className={`${typography.small} truncate mt-0.5`}>
             {activity.campaign}
           </div>
         )}
       </div>
-      <div className="text-xs text-gray-400 flex-shrink-0">
+      <div className={typography.small}>
         {activity.timestamp
           ? formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })
           : 'just now'}
@@ -76,12 +89,12 @@ export default function LeadActivityFeed() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Lead Activity</h2>
+      <div className={`${card.base} ${spacing.cardPadding}`}>
+        <h2 className={`${typography.cardTitle} mb-4`}>Lead Activity</h2>
         <div className="animate-pulse space-y-3">
-          {[1, 2, 3, 4, 5].map(i => (
+          {[1, 2, 3].map(i => (
             <div key={i} className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
+              <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
               <div className="flex-1">
                 <div className="h-4 bg-gray-200 rounded w-32 mb-1"></div>
                 <div className="h-3 bg-gray-200 rounded w-24"></div>
@@ -93,29 +106,44 @@ export default function LeadActivityFeed() {
     );
   }
 
+  // Activity count badges component
+  const ActivityBadges = ({ size = 'default' }) => {
+    const badgeClass = size === 'small'
+      ? 'px-2 py-0.5 rounded-full text-xs font-medium'
+      : 'px-3 py-1 rounded-full text-xs font-medium';
+
+    return (
+      <div className="flex gap-2">
+        <span className={`${badgeClass} ${activityColors.emailOpened.bg} ${activityColors.emailOpened.text}`}>
+          {counts.opens || 0} opens
+        </span>
+        <span className={`${badgeClass} ${activityColors.emailReplied.bg} ${activityColors.emailReplied.text}`}>
+          {counts.replies || 0} replies
+        </span>
+        {size !== 'small' && (
+          <span className={`${badgeClass} ${activityColors.emailClicked.bg} ${activityColors.emailClicked.text}`}>
+            {counts.clicks || 0} clicks
+          </span>
+        )}
+      </div>
+    );
+  };
+
   // If no activities but also no error, show setup message
   if (activities.length === 0 && !error) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Lead Activity</h2>
+      <div className={`${card.base} ${spacing.cardPadding}`}>
+        <h2 className={`${typography.cardTitle} mb-4`}>Lead Activity</h2>
 
         {/* Activity count badges */}
-        <div className="flex gap-3 mb-4">
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            {counts.opens || 0} opens
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            {counts.replies || 0} replies
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-            {counts.clicks || 0} clicks
-          </span>
+        <div className="mb-6">
+          <ActivityBadges />
         </div>
 
-        <div className="text-center py-8 text-gray-500">
-          <Mail className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-          <p className="font-medium">No recent activity</p>
-          <p className="text-sm mt-1">
+        <div className="text-center py-8">
+          <Mail className={`${iconSizes.lg} mx-auto text-gray-300 mb-3`} />
+          <p className="font-medium text-gray-900">No recent activity</p>
+          <p className={`${typography.label} mt-2`}>
             {data?.message || 'Configure Lemlist webhooks to track email activity'}
           </p>
         </div>
@@ -124,17 +152,10 @@ export default function LeadActivityFeed() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Lead Activity</h2>
-        <div className="flex gap-2">
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            {counts.opens || 0} opens
-          </span>
-          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            {counts.replies || 0} replies
-          </span>
-        </div>
+    <div className={`${card.base} ${spacing.cardPadding}`}>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className={typography.cardTitle}>Lead Activity</h2>
+        <ActivityBadges size="small" />
       </div>
 
       <div className="space-y-0 max-h-[400px] overflow-y-auto">

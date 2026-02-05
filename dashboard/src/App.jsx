@@ -7,6 +7,7 @@ import LeadOverview from './components/dashboard/LeadOverview';
 import CampaignTable from './components/dashboard/CampaignTable';
 import LeadActivityFeed from './components/dashboard/LeadActivityFeed';
 import MeetingsBooked from './components/dashboard/MeetingsBooked';
+import { spacing } from './styles/designTokens';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -28,7 +29,7 @@ function Dashboard() {
       <GTMKPIBar />
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className={`grid grid-cols-1 lg:grid-cols-2 ${spacing.sectionGap} mb-8`}>
         {/* Campaign Performance */}
         <CampaignTable />
 
@@ -37,7 +38,7 @@ function Dashboard() {
       </div>
 
       {/* Bottom Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 lg:grid-cols-2 ${spacing.sectionGap}`}>
         {/* Lead Activity Feed */}
         <LeadActivityFeed />
 

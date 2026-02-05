@@ -1,9 +1,15 @@
-import { Target, MessageSquare, Percent, Users } from 'lucide-react';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { Target, MessageSquare, Percent, Users, TrendingUp, TrendingDown } from 'lucide-react';
 import { useFunnelStats } from '../../hooks/useFunnel';
 import { useLeadsSummary } from '../../hooks/useLeads';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useFilters } from '../../context/FilterContext';
+import {
+  typography,
+  spacing,
+  card,
+  interactive,
+  iconSizes
+} from '../../styles/designTokens';
 
 function KPICard({ title, value, delta, icon: Icon, loading, highlight = false }) {
   const isPositive = delta > 0;
@@ -11,28 +17,28 @@ function KPICard({ title, value, delta, icon: Icon, loading, highlight = false }
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6 animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-24 mb-3"></div>
-        <div className="h-8 bg-gray-200 rounded w-16"></div>
+      <div className={`${card.base} ${spacing.cardPadding} animate-pulse`}>
+        <div className="h-4 bg-gray-200 rounded w-24 mb-4"></div>
+        <div className="h-10 bg-gray-200 rounded w-20"></div>
       </div>
     );
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow ${highlight ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-500">{title}</span>
+    <div className={`${highlight ? card.highlighted : card.interactive} ${spacing.cardPadding}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className={typography.label}>{title}</span>
         <div className={`p-2 rounded-lg ${highlight ? 'bg-green-100' : 'bg-gray-100'}`}>
-          <Icon className={`w-5 h-5 ${highlight ? 'text-green-600' : 'text-gray-600'}`} />
+          <Icon className={`${iconSizes.md} ${highlight ? 'text-green-600' : 'text-gray-600'}`} />
         </div>
       </div>
       <div className="flex items-baseline gap-2">
-        <span className={`text-3xl font-bold ${highlight ? 'text-green-600' : 'text-gray-900'}`}>
+        <span className={`${typography.hero} ${highlight ? 'text-green-600' : ''}`}>
           {value}
         </span>
         {hasChange && (
-          <span className={`flex items-center text-sm ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-            {isPositive ? <TrendingUp className="w-4 h-4 mr-0.5" /> : <TrendingDown className="w-4 h-4 mr-0.5" />}
+          <span className={`flex items-center text-sm ${isPositive ? 'text-green-600' : 'text-red-600'} ${interactive.transition}`}>
+            {isPositive ? <TrendingUp className={`${iconSizes.sm} mr-0.5`} /> : <TrendingDown className={`${iconSizes.sm} mr-0.5`} />}
             {isPositive ? '+' : ''}{delta}
           </span>
         )}
@@ -68,7 +74,7 @@ export default function GTMKPIBar() {
   const loading = funnelLoading || leadsLoading || campaignsLoading;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+    <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 ${spacing.cardGap} mb-8`}>
       <KPICard
         title="Lead to Meeting"
         value={`${leadToMeetingRate}%`}

@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { ChevronUp, ChevronDown, AlertCircle, Flame, Calendar } from 'lucide-react';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useFilters } from '../../context/FilterContext';
+import {
+  typography,
+  spacing,
+  card,
+  interactive,
+  iconSizes,
+  statusColors,
+  getStatusColors
+} from '../../styles/designTokens';
 
 export default function CampaignTable() {
   const { owner } = useFilters();
@@ -20,8 +29,8 @@ export default function CampaignTable() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Campaign Performance</h2>
+      <div className={`${card.base} ${spacing.cardPadding}`}>
+        <h2 className={`${typography.cardTitle} mb-4`}>Campaign Performance</h2>
         <div className="animate-pulse space-y-3">
           {[1, 2, 3].map(i => (
             <div key={i} className="h-12 bg-gray-200 rounded"></div>
@@ -65,67 +74,70 @@ export default function CampaignTable() {
   const SortIcon = ({ field }) => {
     if (sortField !== field) return null;
     return sortDir === 'asc' ? (
-      <ChevronUp className="w-4 h-4 inline" />
+      <ChevronUp className={`${iconSizes.sm} inline ml-1`} />
     ) : (
-      <ChevronDown className="w-4 h-4 inline" />
+      <ChevronDown className={`${iconSizes.sm} inline ml-1`} />
     );
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'running':
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'paused':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const getStatusClasses = (status) => {
+    const colors = getStatusColors(status);
+    return `${colors.bg} ${colors.text}`;
   };
 
+  // Header cell base styling
+  const headerCell = `py-3 px-3 ${typography.tableHeader}`;
+  const headerCellSortable = `${headerCell} cursor-pointer hover:text-gray-700 ${interactive.focusRing} outline-none`;
+
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Campaign Performance</h2>
-        <span className="text-sm text-gray-500">{campaigns.length} campaigns</span>
+    <div className={`${card.base} ${spacing.cardPadding}`}>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className={typography.cardTitle}>Campaign Performance</h2>
+        <span className={typography.label}>{campaigns.length} campaigns</span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto -mx-8 px-8">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-2 text-sm font-medium text-gray-500">Status</th>
+              <th className={`text-left ${headerCell}`}>Status</th>
               <th
-                className="text-left py-3 px-2 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700"
+                className={`text-left ${headerCellSortable}`}
                 onClick={() => handleSort('name')}
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
               >
-                Campaign <SortIcon field="name" />
+                Campaign<SortIcon field="name" />
               </th>
-              <th className="text-left py-3 px-2 text-sm font-medium text-gray-500">Owner</th>
+              <th className={`text-left ${headerCell}`}>Owner</th>
               <th
-                className="text-right py-3 px-2 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700"
+                className={`text-right ${headerCellSortable}`}
                 onClick={() => handleSort('leadsCount')}
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSort('leadsCount')}
               >
-                Leads <SortIcon field="leadsCount" />
+                Leads<SortIcon field="leadsCount" />
               </th>
-              <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">Sent</th>
-              <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">Opens</th>
+              <th className={`text-right ${headerCell}`}>Sent</th>
+              <th className={`text-right ${headerCell}`}>Opens</th>
               <th
-                className="text-right py-3 px-2 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700"
+                className={`text-right ${headerCellSortable}`}
                 onClick={() => handleSort('replyRate')}
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSort('replyRate')}
               >
-                Reply % <SortIcon field="replyRate" />
+                Reply %<SortIcon field="replyRate" />
               </th>
-              <th className="text-right py-3 px-2 text-sm font-medium text-gray-500">
-                Mtgs
+              <th className={`text-right ${headerCell}`}>
+                Meetings
               </th>
               <th
-                className="text-right py-3 px-2 text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700"
+                className={`text-right ${headerCellSortable}`}
                 onClick={() => handleSort('meetingRate')}
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSort('meetingRate')}
               >
-                Mtg % <SortIcon field="meetingRate" />
+                Meeting %<SortIcon field="meetingRate" />
               </th>
             </tr>
           </thead>
@@ -140,49 +152,49 @@ export default function CampaignTable() {
               return (
                 <tr
                   key={campaign.id}
-                  className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  className={`border-b border-gray-100 ${interactive.rowHover}`}
                 >
-                  <td className="py-3 px-2">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(campaign.status)}`}>
+                  <td className="py-3 px-3">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusClasses(campaign.status)}`}>
                       {campaign.status}
                     </span>
                   </td>
-                  <td className="py-3 px-2">
+                  <td className="py-3 px-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900">{campaign.name}</span>
+                      <span className={typography.tableBody}>{campaign.name}</span>
                       {isLowPerforming && (
-                        <AlertCircle className="w-4 h-4 text-red-500" title="Low reply rate" />
+                        <AlertCircle className={`${iconSizes.sm} text-red-500`} title="Low reply rate" />
                       )}
                       {isHighPerforming && (
-                        <Flame className="w-4 h-4 text-orange-500" title="High meeting conversion" />
+                        <Flame className={`${iconSizes.sm} text-orange-500`} title="High meeting conversion" />
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-2 text-sm text-gray-600 capitalize">
+                  <td className="py-3 px-3 text-sm text-gray-600 capitalize">
                     {campaign.owner || '-'}
                   </td>
-                  <td className="py-3 px-2 text-sm text-gray-900 text-right">
+                  <td className={`py-3 px-3 text-right ${typography.bodyMetric}`}>
                     {campaign.metrics?.leadsCount || 0}
                   </td>
-                  <td className="py-3 px-2 text-sm text-gray-600 text-right">
+                  <td className="py-3 px-3 text-sm text-gray-600 text-right">
                     {campaign.metrics?.emailsSent || 0}
                   </td>
-                  <td className="py-3 px-2 text-sm text-gray-600 text-right">
+                  <td className="py-3 px-3 text-sm text-gray-600 text-right">
                     {campaign.metrics?.emailsOpened || 0}
                   </td>
-                  <td className="py-3 px-2 text-right">
-                    <span className={`text-sm font-medium ${isLowPerforming ? 'text-red-600' : 'text-gray-900'}`}>
+                  <td className="py-3 px-3 text-right">
+                    <span className={`${typography.bodyMetric} ${isLowPerforming ? 'text-red-600' : ''}`}>
                       {replyRate}%
                     </span>
                   </td>
-                  <td className="py-3 px-2 text-right">
+                  <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Calendar className="w-3 h-3 text-gray-400" />
-                      <span className="text-sm text-gray-900">{meetingsBooked}</span>
+                      <Calendar className={`${iconSizes.sm} text-gray-400`} />
+                      <span className={typography.bodyMetric}>{meetingsBooked}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-2 text-right">
-                    <span className={`text-sm font-medium ${isHighPerforming ? 'text-green-600' : 'text-gray-900'}`}>
+                  <td className="py-3 px-3 text-right">
+                    <span className={`${typography.bodyMetric} ${isHighPerforming ? 'text-green-600' : ''}`}>
                       {meetingRate}%
                     </span>
                   </td>
@@ -193,8 +205,9 @@ export default function CampaignTable() {
         </table>
 
         {campaigns.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No campaigns found. Trigger a sync to load data.
+          <div className="text-center py-12">
+            <p className="font-medium text-gray-900">No campaigns found</p>
+            <p className={`${typography.label} mt-2`}>Trigger a sync to load data</p>
           </div>
         )}
       </div>
