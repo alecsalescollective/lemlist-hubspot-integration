@@ -137,6 +137,7 @@ class DashboardService {
     let query = getSupabase()
       .from('campaigns')
       .select('*')
+      .eq('status', 'active')  // Only show running/active campaigns
       .order('synced_at', { ascending: false });
 
     if (owner && owner !== 'all') {
