@@ -62,6 +62,56 @@ router.get('/debug', async (req, res) => {
 });
 
 /**
+ * GET /api/sync/debug-contact/:email
+ * Debug: Look up a specific contact by email
+ */
+router.get('/debug-contact/:email', async (req, res) => {
+  const token = process.env.HUBSPOT_ACCESS_TOKEN;
+  const email = req.params.email;
+
+  try {
+    // Search for specific contact by email
+    const response = await axios.post(
+      'https://api.hubapi.com/crm/v3/objects/contacts/search',
+      {
+        filterGroups: [{
+          filters: [{
+            propertyName: 'email',
+            operator: 'EQ',
+            value: email
+          }]
+        }],
+        properties: ['email', 'firstname', 'lastname', 'add_to_lemlist', 'hubspot_owner_id', 'lifecyclestage', 'hs_email_optout'],
+        limit: 1
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (response.data.results?.length > 0) {
+      const contact = response.data.results[0];
+      res.json({
+        found: true,
+        contact: {
+          id: contact.id,
+          properties: contact.properties
+        }
+      });
+    } else {
+      res.json({ found: false, email });
+    }
+  } catch (error) {
+    res.json({
+      error: error.response?.data || error.message
+    });
+  }
+});
+
+/**
  * GET /api/sync/debug-contacts
  * Debug: List recent contacts with their add_to_lemlist values
  */
