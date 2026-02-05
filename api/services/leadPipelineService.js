@@ -244,6 +244,14 @@ class LeadPipelineService {
       }
     }
 
+    // Add owner name for AI personalization
+    const ownerNameMap = {
+      'alec': 'Alec McCullough',
+      'janae': 'Janae Gilliam',
+      'kate': 'Kate Norton'
+    };
+    leadPayload.Owner = ownerNameMap[ownerName] || ownerName;
+
     // Add lead to Lemlist campaign
     await lemlist.addLeadToCampaign(campaignId, leadPayload);
 
