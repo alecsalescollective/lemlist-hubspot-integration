@@ -1,18 +1,14 @@
 /**
  * PasswordGate - Simple password protection for the dashboard
  * Stores authentication in sessionStorage (clears when browser closes)
+ *
+ * Set the password via environment variable: VITE_DASHBOARD_PASSWORD
  */
 import { useState, useEffect } from 'react';
 import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
 
-// Password hash (SHA-256 of the password)
-// To change password: run in browser console:
-// crypto.subtle.digest('SHA-256', new TextEncoder().encode('YOUR_PASSWORD')).then(h => console.log(Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('')))
-const PASSWORD_HASH = '5e884898da28047d5725d8c4c0d5f3c35e7c7e9e9a7d5e7a5b9c3d4e5f6a7b8c'; // Default: "password" - CHANGE THIS
-
-// For demo purposes, using a simple comparison (in production, use proper hashing)
-const DEMO_PASSWORD = 'salescollective2024';
+// Password from environment variable (set in Vercel dashboard or .env.local)
+const DASHBOARD_PASSWORD = import.meta.env.VITE_DASHBOARD_PASSWORD;
 
 const AUTH_KEY = 'dashboard_authenticated';
 
@@ -36,7 +32,12 @@ export default function PasswordGate({ children }) {
     e.preventDefault();
     setError('');
 
-    if (password === DEMO_PASSWORD) {
+    if (!DASHBOARD_PASSWORD) {
+      setError('Password not configured. Set VITE_DASHBOARD_PASSWORD env var.');
+      return;
+    }
+
+    if (password === DASHBOARD_PASSWORD) {
       sessionStorage.setItem(AUTH_KEY, 'true');
       setIsAuthenticated(true);
     } else {
