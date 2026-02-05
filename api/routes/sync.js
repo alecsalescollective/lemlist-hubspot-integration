@@ -62,6 +62,59 @@ router.get('/debug', async (req, res) => {
 });
 
 /**
+ * GET /api/sync/debug-search
+ * Debug: Test HubSpot search for triggered contacts
+ */
+router.get('/debug-search', async (req, res) => {
+  const token = process.env.HUBSPOT_ACCESS_TOKEN;
+  const routingConfig = require('../config/routing.json');
+
+  const triggerField = routingConfig.trigger_field;
+  const triggerValue = routingConfig.trigger_value;
+
+  try {
+    // Search for contacts with trigger field set
+    const searchResponse = await axios.post(
+      'https://api.hubapi.com/crm/v3/objects/contacts/search',
+      {
+        filterGroups: [{
+          filters: [{
+            propertyName: triggerField,
+            operator: 'EQ',
+            value: triggerValue
+          }]
+        }],
+        properties: ['email', 'firstname', 'lastname', triggerField, 'hubspot_owner_id'],
+        limit: 10
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    res.json({
+      config: { triggerField, triggerValue },
+      searchResults: searchResponse.data.total,
+      contacts: searchResponse.data.results?.map(c => ({
+        id: c.id,
+        email: c.properties.email,
+        name: `${c.properties.firstname || ''} ${c.properties.lastname || ''}`.trim(),
+        triggerFieldValue: c.properties[triggerField],
+        ownerId: c.properties.hubspot_owner_id
+      }))
+    });
+  } catch (error) {
+    res.json({
+      config: { triggerField, triggerValue },
+      error: error.response?.data || error.message
+    });
+  }
+});
+
+/**
  * POST /api/sync/trigger
  * Manually trigger a sync for all data types
  */
