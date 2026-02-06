@@ -12,6 +12,7 @@ import CampaignTable from './components/dashboard/CampaignTable';
 import LeadActivityFeed from './components/dashboard/LeadActivityFeed';
 import MeetingsBooked from './components/dashboard/MeetingsBooked';
 import { layout } from './styles/designTokens';
+import { useAutoSync } from './hooks/useSync';
 
 // Create React Query client with optimized defaults
 const queryClient = new QueryClient({
@@ -25,6 +26,9 @@ const queryClient = new QueryClient({
 });
 
 function Dashboard() {
+  // Auto-sync on mount and every 15 minutes
+  useAutoSync();
+
   return (
     <Layout>
       {/* Funnel Visualization - Full Width */}
