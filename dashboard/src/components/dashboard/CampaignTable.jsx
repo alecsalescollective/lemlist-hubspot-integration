@@ -305,12 +305,6 @@ export default function CampaignTable() {
         </div>
       )}
 
-      {/* Benchmark note */}
-      {campaigns.length > 0 && (
-        <p className={`${typography.small} mt-4 text-center`}>
-          Industry avg: Reply 8-12% · Meeting 4-6%
-        </p>
-      )}
     </div>
   );
 }
