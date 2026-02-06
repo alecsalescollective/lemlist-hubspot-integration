@@ -200,7 +200,7 @@ class LeadPipelineService {
     const { data: existing } = await supabase
       .from('processed_leads')
       .select('id')
-      .or(`hubspot_contact_id.eq.${contactId},email.eq.${email}`)
+      .or(`contact_id.eq.${contactId},email.eq.${email}`)
       .limit(1);
 
     if (existing && existing.length > 0) {
@@ -321,13 +321,13 @@ class LeadPipelineService {
     const { supabase } = getClients();
 
     await supabase.from('processed_leads').upsert({
-      hubspot_contact_id: contactId,
+      contact_id: contactId,
       email,
       owner,
       campaign_id: campaignId,
       lead_source: leadSource || 'trigger',
       processed_at: new Date().toISOString()
-    }, { onConflict: 'hubspot_contact_id' });
+    }, { onConflict: 'contact_id' });
   }
 
   /**
