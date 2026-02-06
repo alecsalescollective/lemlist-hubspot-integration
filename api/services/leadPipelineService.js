@@ -237,11 +237,9 @@ class LeadPipelineService {
       logger.warn({ contactId, email, error: enrichError.message }, 'Lead enrichment failed, continuing with original data');
     }
 
-    // Add AI context fields
+    // Add AI context fields - always send all fields, use empty string if no data
     for (const [lemlistVar, hubspotProp] of Object.entries(routingConfig.ai_context_fields || {})) {
-      if (props[hubspotProp]) {
-        leadPayload[lemlistVar] = String(props[hubspotProp]);
-      }
+      leadPayload[lemlistVar] = props[hubspotProp] ? String(props[hubspotProp]) : '';
     }
 
     // Add owner name for AI personalization
