@@ -22,10 +22,10 @@ export const colors = {
 // Owner Colors - Consistent across all components
 export const ownerColors = {
   alec: {
-    bg: 'bg-blue-100 dark:bg-blue-900/30',
-    text: 'text-blue-700 dark:text-blue-300',
-    bar: '#3B82F6',
-    ring: 'ring-blue-500',
+    bg: 'bg-purple-100 dark:bg-purple-900/30',
+    text: 'text-purple-700 dark:text-purple-300',
+    bar: '#8B5CF6',
+    ring: 'ring-purple-500',
   },
   janae: {
     bg: 'bg-green-100 dark:bg-green-900/30',
