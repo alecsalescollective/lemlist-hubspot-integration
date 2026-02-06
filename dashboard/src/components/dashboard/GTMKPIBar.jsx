@@ -55,7 +55,6 @@ export default function GTMKPIBar() {
         loading={loading}
         highlight="primary"
         metricType="conversionRate"
-        benchmark="Industry avg: 6-10%"
       />
 
       {/* Secondary KPI - Total Replies */}
@@ -75,7 +74,6 @@ export default function GTMKPIBar() {
         loading={loading}
         highlight="none"
         metricType="replyRate"
-        benchmark="Industry avg: 8-12%"
       />
 
       {/* Standard KPI - In Sequence Count */}
