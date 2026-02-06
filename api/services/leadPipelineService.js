@@ -136,14 +136,18 @@ class LeadPipelineService {
     ];
 
     try {
+      // Search for both "true" and "Yes" values (HubSpot checkbox can return either)
+      const triggerValues = Array.isArray(triggerValue) ? triggerValue : [triggerValue];
+      const filterGroups = triggerValues.map(val => ({
+        filters: [{
+          propertyName: triggerField,
+          operator: 'EQ',
+          value: val
+        }]
+      }));
+
       const response = await hubspot.client.post('/crm/v3/objects/contacts/search', {
-        filterGroups: [{
-          filters: [{
-            propertyName: triggerField,
-            operator: 'EQ',
-            value: triggerValue
-          }]
-        }],
+        filterGroups,
         properties,
         limit: 100
       });
