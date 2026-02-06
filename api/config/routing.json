@@ -18,11 +18,10 @@
     "companyName": "company"
   },
   "ai_context_fields": {
-    "leadSource": "lead_source",
+    "leadSource": "hs_object_source_detail_1",
     "problemHypothesis": "problem_hypothesis",
     "salesReps": "sales_reps",
-    "annualRevenue": "annualrevenue",
-    "sourceDetail": "hs_object_source_detail_1"
+    "annualRevenue": "annualrevenue"
   },
   "exclusion_rules": {
     "exclude_lifecycle_stages": ["customer", "evangelist"],
