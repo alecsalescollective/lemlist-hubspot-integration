@@ -167,7 +167,7 @@ export default function LeadOverview() {
                 <Tooltip {...commonTooltipProps} />
                 <Bar
                   dataKey="count"
-                  fill={colors.primary}
+                  fill="#14B8A6"
                   radius={chartConfig.barRadius}
                 />
               </BarChart>
