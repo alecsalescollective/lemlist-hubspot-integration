@@ -18,6 +18,9 @@ const config = {
   },
   // Lemcal meetings come via webhooks - no API credentials needed
   lemcal: {},
+  salesforce: {
+    loginUrl: 'https://login.salesforce.com'
+  },
   routing: {
     // HubSpot owner ID to name mapping
     owners: {

@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { createLogger } = require('../utils/logger');
 const LemlistClient = require('../clients/lemlist');
+const SalesforceClient = require('../clients/salesforce');
 const { config } = require('../config');
 const routingConfig = require('../config/routing.json');
 const leadPipelineService = require('./leadPipelineService');
@@ -60,6 +61,17 @@ class SyncService {
           synced: 0,
           message: 'Meetings are captured via Lemcal webhooks in real-time'
         };
+      }
+
+      // Sync Salesforce pipeline data
+      if (type === 'all' || type === 'pipeline') {
+        try {
+          results.pipeline = await this.syncPipeline();
+        } catch (error) {
+          // Don't fail the whole sync if Salesforce isn't connected yet
+          logger.warn({ error: error.message }, 'Pipeline sync skipped (Salesforce may not be connected)');
+          results.pipeline = { synced: 0, message: error.message };
+        }
       }
 
       return results;
@@ -312,6 +324,88 @@ class SyncService {
     } catch (error) {
       await this.updateSyncStatus('activities', 'failed', 0, error.message);
       logger.error({ error: error.message }, 'Activities sync failed');
+      throw error;
+    }
+  }
+
+  /**
+   * Sync Salesforce pipeline data (Opportunities with Meeting_Held__c or Qualified__c)
+   */
+  async syncPipeline() {
+    logger.info('Starting pipeline sync from Salesforce');
+    const { supabase } = getClients();
+    const salesforce = new SalesforceClient();
+
+    try {
+      await this.updateSyncStatus('pipeline', 'in_progress');
+
+      // Query Opportunities with our custom checkboxes
+      const soql = `
+        SELECT Id, Amount, Meeting_Held__c, Qualified__c, CloseDate, StageName,
+               (SELECT Contact.Email, Contact.Name FROM OpportunityContactRoles LIMIT 1)
+        FROM Opportunity
+        WHERE Meeting_Held__c = true OR Qualified__c = true
+      `;
+
+      const opportunities = await salesforce.query(soql);
+      logger.info({ count: opportunities.length }, 'Fetched opportunities from Salesforce');
+
+      let synced = 0;
+
+      for (const opp of opportunities) {
+        // Extract contact email from OpportunityContactRole
+        const contactRoles = opp.OpportunityContactRoles?.records || [];
+        const contactEmail = contactRoles[0]?.Contact?.Email?.toLowerCase()?.trim() || null;
+        const contactName = contactRoles[0]?.Contact?.Name || null;
+
+        // Determine stage
+        let stage = 'meeting_held';
+        if (opp.Qualified__c) {
+          stage = 'qualified';
+        }
+
+        // Look up owner from processed_leads if we have an email
+        let owner = null;
+        if (contactEmail) {
+          const { data: leadRecord } = await supabase
+            .from('processed_leads')
+            .select('owner')
+            .eq('email', contactEmail)
+            .limit(1)
+            .single();
+
+          if (leadRecord?.owner) {
+            owner = leadRecord.owner;
+          }
+        }
+
+        const { error } = await supabase
+          .from('pipeline_opportunities')
+          .upsert({
+            salesforce_opportunity_id: opp.Id,
+            contact_email: contactEmail,
+            contact_name: contactName,
+            owner,
+            stage,
+            pipeline_value: opp.Amount || 0,
+            close_date: opp.CloseDate || null,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'salesforce_opportunity_id' });
+
+        if (error) {
+          logger.error({ error: error.message, oppId: opp.Id }, 'Failed to upsert opportunity');
+        } else {
+          synced++;
+        }
+      }
+
+      await this.updateSyncStatus('pipeline', 'success', synced);
+      logger.info({ synced }, 'Pipeline sync completed');
+      return { synced, total: opportunities.length };
+
+    } catch (error) {
+      await this.updateSyncStatus('pipeline', 'failed', 0, error.message);
+      logger.error({ error: error.message }, 'Pipeline sync failed');
       throw error;
     }
   }

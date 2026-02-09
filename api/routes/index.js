@@ -9,6 +9,7 @@ const webhooksRoutes = require('./webhooks');
 const cronRoutes = require('./cron');
 const funnelRoutes = require('./funnel');
 const hubspotRoutes = require('./hubspot');
+const salesforceRoutes = require('./salesforce');
 
 // Mount routes
 router.use('/leads', leadsRoutes);
@@ -19,6 +20,7 @@ router.use('/webhooks', webhooksRoutes);
 router.use('/cron', cronRoutes);
 router.use('/funnel', funnelRoutes);
 router.use('/hubspot', hubspotRoutes);
+router.use('/salesforce', salesforceRoutes);
 
 // API info
 router.get('/', (req, res) => {
@@ -32,7 +34,8 @@ router.get('/', (req, res) => {
       sync: '/api/sync',
       webhooks: '/api/webhooks',
       funnel: '/api/funnel',
-      hubspot: '/api/hubspot'
+      hubspot: '/api/hubspot',
+      salesforce: '/api/salesforce'
     }
   });
 });
