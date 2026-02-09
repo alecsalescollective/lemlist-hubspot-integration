@@ -70,14 +70,17 @@ class DashboardService {
     // Group by owner
     const byOwner = this.groupBy(currentLeads || [], 'owner');
 
-    // Group by lead_source with friendly labels
-    const sourceLabels = {
-      'trigger': 'Inbound',
-      'contact_us': 'Contact Us',
-      'manual': 'Manual',
-      'unknown': 'Other'
-    };
-    const bySource = this.groupBy(currentLeads || [], 'lead_source');
+    // Categorize sources using detailed HubSpot source_detail field
+    const sourceCategories = {};
+    const sourceDetails = {};
+    for (const lead of (currentLeads || [])) {
+      const { category, detail } = this.categorizeSource(lead.source_detail, lead.lead_source);
+      // Group by category
+      sourceCategories[category] = (sourceCategories[category] || 0) + 1;
+      // Group by detail (granular)
+      const detailKey = detail || category;
+      sourceDetails[detailKey] = (sourceDetails[detailKey] || 0) + 1;
+    }
 
     // Status: all processed leads are "in sequence" (they go straight to campaign)
     // Get meeting count for "converted" status
@@ -106,9 +109,13 @@ class DashboardService {
         delta: 0
       })),
       byStatus,
-      bySource: Object.entries(bySource).map(([source, leads]) => ({
-        source: sourceLabels[source] || sourceLabels[source?.toLowerCase()] || source || 'Other',
-        count: leads.length
+      bySource: Object.entries(sourceCategories).map(([category, count]) => ({
+        source: category,
+        count
+      })),
+      bySourceDetail: Object.entries(sourceDetails).map(([detail, count]) => ({
+        source: detail,
+        count
       })),
       period: dateRange,
       lastUpdated: new Date().toISOString()
@@ -683,6 +690,32 @@ class DashboardService {
   // ==========================================
   // HELPERS
   // ==========================================
+
+  /**
+   * Categorize a lead source from HubSpot's hs_object_source_detail_1 field
+   * Returns { category, detail } where category is the group and detail is the specific source
+   */
+  categorizeSource(sourceDetail, leadSource) {
+    if (sourceDetail) {
+      const trimmed = sourceDetail.trim();
+      // Lead Magnet: starts with "LM - " or "LM-"
+      const lmMatch = trimmed.match(/^LM\s*[-–—]\s*(.+)/i);
+      if (lmMatch) {
+        return { category: 'Lead Magnet', detail: lmMatch[1].trim() };
+      }
+      // Contact Us
+      if (/contact\s*us/i.test(trimmed)) {
+        return { category: 'Contact Us', detail: null };
+      }
+      // Any other known value - use as-is
+      return { category: trimmed, detail: null };
+    }
+    // No source_detail: fall back to lead_source field
+    if (leadSource === 'contact_us') {
+      return { category: 'Contact Us', detail: null };
+    }
+    return { category: 'Inbound (Other)', detail: null };
+  }
 
   /**
    * Get date filter based on range string

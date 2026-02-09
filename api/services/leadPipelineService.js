@@ -213,7 +213,7 @@ class LeadPipelineService {
 
     if (existingLead) {
       logger.info({ contactId, email }, 'Lead already exists in Lemlist, marking as processed');
-      await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source);
+      await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source, props.hs_object_source_detail_1);
       return { duplicate: true };
     }
 
@@ -266,7 +266,7 @@ class LeadPipelineService {
     await lemlist.addLeadToCampaign(campaignId, leadPayload);
 
     // Mark as processed in Supabase (this prevents re-processing since we can't clear HubSpot trigger)
-    await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source);
+    await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source, props.hs_object_source_detail_1);
 
     logger.info({ contactId, email, campaignId }, 'Lead added to Lemlist campaign');
 
@@ -325,7 +325,7 @@ class LeadPipelineService {
   /**
    * Mark contact as processed in Supabase
    */
-  async markProcessed(contactId, email, owner, campaignId, leadSource) {
+  async markProcessed(contactId, email, owner, campaignId, leadSource, sourceDetail) {
     const { supabase } = getClients();
 
     await supabase.from('processed_leads').upsert({
@@ -334,6 +334,7 @@ class LeadPipelineService {
       owner,
       campaign_id: campaignId,
       lead_source: leadSource || 'trigger',
+      source_detail: sourceDetail || null,
       processed_at: new Date().toISOString()
     }, { onConflict: 'contact_id' });
   }

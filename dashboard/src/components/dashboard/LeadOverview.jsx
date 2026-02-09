@@ -60,11 +60,10 @@ export default function LeadOverview() {
     color: statusColors[status]?.bar || statusColors.draft?.bar || '#6B7280',
   }));
 
+  // Use granular source detail when available, fall back to category
   const sourceData =
-    data?.bySource?.map((s) => ({
-      name:
-        s.source?.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()) ||
-        'Unknown',
+    (data?.bySourceDetail || data?.bySource)?.map((s) => ({
+      name: s.source || 'Unknown',
       count: s.count,
     })) || [];
 
@@ -154,14 +153,14 @@ export default function LeadOverview() {
         {/* By Source */}
         <div className="sm:col-span-2 lg:col-span-1">
           <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Source</h3>
-          <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by source chart">
+          <div className={sourceData.length > 3 ? 'h-48 sm:h-56 lg:h-64' : 'h-32 sm:h-40 lg:h-48'} role="img" aria-label="Leads by source chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sourceData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={70}
+                  width={120}
                   tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
