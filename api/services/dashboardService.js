@@ -162,8 +162,9 @@ class DashboardService {
 
     const { data: rawData, error } = await query;
 
-    // Filter out campaigns with 0 leads and 0 sends (no activity)
+    // Only show inbound campaigns, filter out campaigns with no activity
     const data = (rawData || []).filter(c =>
+      c.name?.toLowerCase().includes('inbound') &&
       (c.leads_count > 0 || c.emails_sent > 0)
     );
     if (error) throw error;
