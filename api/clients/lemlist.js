@@ -99,6 +99,23 @@ class LemlistClient {
   }
 
   /**
+   * Get all leads in a campaign with their activity statuses
+   * @param {string} campaignId - Campaign ID
+   * @returns {Promise<Array>} - Array of leads with statuses
+   */
+  async getCampaignLeadStatuses(campaignId) {
+    try {
+      const response = await this.client.get(`/campaigns/${campaignId}/export`);
+      return response.data || [];
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Submit a lead for enrichment
    * @param {Object} params - Enrichment parameters
    * @returns {Promise<Object>} - Enrichment job with ID

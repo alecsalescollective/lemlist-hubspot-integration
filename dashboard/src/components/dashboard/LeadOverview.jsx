@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import { Users } from 'lucide-react';
 import { useLeadsSummary } from '../../hooks/useLeads';
 import { useTriggerSync } from '../../hooks/useSync';
@@ -117,6 +117,7 @@ export default function LeadOverview() {
                   {ownerData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
+                  <LabelList dataKey="count" position="right" fill="#6B7280" fontSize={12} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -143,6 +144,7 @@ export default function LeadOverview() {
                   {statusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
+                  <LabelList dataKey="count" position="right" fill="#6B7280" fontSize={12} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -169,7 +171,9 @@ export default function LeadOverview() {
                   dataKey="count"
                   fill="#14B8A6"
                   radius={chartConfig.barRadius}
-                />
+                >
+                  <LabelList dataKey="count" position="right" fill="#6B7280" fontSize={12} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

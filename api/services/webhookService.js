@@ -95,8 +95,8 @@ class WebhookService {
       contactName = `${payload.firstName} ${payload.lastName || ''}`.trim();
     }
 
-    // Try to determine owner from attendees or meeting type
-    const owner = this.determineOwnerFromWebhook(payload);
+    // Try to determine owner from contact email in processed_leads
+    const owner = await this.determineOwnerFromWebhook(payload, email);
 
     const meetingData = {
       lemcal_meeting_id: meetingId,
@@ -133,21 +133,23 @@ class WebhookService {
 
   /**
    * Determine owner from webhook payload
-   * Check attendees against known team emails
+   * Look up the contact email in processed_leads to find their owner
    */
-  determineOwnerFromWebhook(payload) {
-    // You can configure these in routing.json or environment
-    const knownOwnerEmails = {
-      // 'alec@yourcompany.com': 'alec',
-      // 'janae@yourcompany.com': 'janae',
-      // 'kate@yourcompany.com': 'kate'
-    };
+  async determineOwnerFromWebhook(payload, contactEmail = null) {
+    // Try to look up owner from processed_leads by contact email
+    if (contactEmail) {
+      try {
+        const { supabase } = getClients();
+        const { data } = await supabase
+          .from('processed_leads')
+          .select('owner')
+          .eq('email', contactEmail.toLowerCase().trim())
+          .limit(1)
+          .single();
 
-    // Check attendees
-    if (payload.attendees?.length > 0) {
-      for (const attendee of payload.attendees) {
-        const owner = knownOwnerEmails[attendee.email?.toLowerCase()];
-        if (owner) return owner;
+        if (data?.owner) return data.owner;
+      } catch {
+        // Fall through to other methods
       }
     }
 
@@ -274,16 +276,30 @@ class WebhookService {
 
     logger.info({ email, activityType }, 'Processing Lemlist activity webhook');
 
-    // Extract campaign info and owner
+    // Extract campaign info
     const campaignId = payload.campaignId || payload.campaign?._id;
     const campaignName = payload.campaignName || payload.campaign?.name;
 
-    // Derive owner from campaign name (e.g., "Alec - Q4 Outreach" -> "alec")
+    // Look up owner from processed_leads by email (reliable for shared campaigns)
     let owner = null;
-    if (campaignName) {
-      const ownerMatch = campaignName.match(/^(alec|janae|kate)/i);
-      if (ownerMatch) {
-        owner = ownerMatch[1].toLowerCase();
+    try {
+      const { data: leadRecord } = await supabase
+        .from('processed_leads')
+        .select('owner')
+        .eq('email', email.toLowerCase().trim())
+        .limit(1)
+        .single();
+
+      if (leadRecord?.owner) {
+        owner = leadRecord.owner;
+      }
+    } catch {
+      // Fallback: try campaign name regex
+      if (campaignName) {
+        const ownerMatch = campaignName.match(/^(alec|janae|kate)/i);
+        if (ownerMatch) {
+          owner = ownerMatch[1].toLowerCase();
+        }
       }
     }
 

@@ -137,12 +137,10 @@ class DashboardService {
     let query = getSupabase()
       .from('campaigns')
       .select('*')
-      .eq('lemlist_campaign_id', 'cam_DXge9ffvr6za36sJi')  // Only show Inbound AI Automated campaign
       .order('synced_at', { ascending: false });
 
-    if (owner && owner !== 'all') {
-      query = query.eq('owner', owner);
-    }
+    // Don't filter by owner for shared campaigns (all 3 sellers share one campaign)
+    // Per-owner breakdown comes from processed_leads, not campaigns table
 
     const { data, error } = await query;
     if (error) throw error;
