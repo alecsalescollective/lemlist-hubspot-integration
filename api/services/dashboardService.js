@@ -4,7 +4,7 @@ const { createLogger } = require('../utils/logger');
 const logger = createLogger('dashboard-service');
 
 // Hard-coded launch date - no data before this is relevant
-const LAUNCH_DATE = '2026-02-09T00:00:00.000Z';
+const LAUNCH_DATE = '2026-02-05T00:00:00.000Z';
 
 // Lazy initialization for serverless environment
 let supabase;
