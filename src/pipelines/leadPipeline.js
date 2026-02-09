@@ -272,6 +272,14 @@ class LeadPipeline {
       );
     }
 
+    // Fetch seller's Lemcal calendar link from Supabase
+    const calendarLink = await this.getCalendarLink(ownerName);
+    if (calendarLink) {
+      leadPayload.lemcal_calendar_link = calendarLink;
+    } else {
+      runLogger.warn(logContext, 'No calendar link found for owner');
+    }
+
     runLogger.debug(logContext, 'Adding lead to campaign');
 
     // Add lead to Lemlist
@@ -372,6 +380,32 @@ class LeadPipeline {
     if (leadPayload.phone) enrichedFields.push('phone');
     if (leadPayload.enriched) enrichedFields.push('verified');
     return enrichedFields;
+  }
+
+  /**
+   * Get the Lemcal calendar link for an owner from Supabase
+   * @param {string} ownerName - Owner name (e.g. 'alec')
+   * @returns {Promise<string|null>} Calendar link or null
+   */
+  async getCalendarLink(ownerName) {
+    const { data, error } = await this.stateStore.client
+      .from('seller_calendar_links')
+      .select('calendar_link')
+      .eq('owner', ownerName)
+      .single();
+
+    if (error || !data) {
+      logger.debug({ ownerName, error: error?.message }, 'Could not fetch calendar link');
+      return null;
+    }
+
+    // Don't return placeholder values
+    if (data.calendar_link.startsWith('PLACEHOLDER')) {
+      logger.debug({ ownerName }, 'Calendar link is a placeholder, skipping');
+      return null;
+    }
+
+    return data.calendar_link;
   }
 
   /**
