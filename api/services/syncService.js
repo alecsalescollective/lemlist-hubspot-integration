@@ -205,16 +205,19 @@ class SyncService {
           (existingActivities || []).map(a => `${a.lead_email}:${a.activity_type}`)
         );
 
-        // Build owner lookup from processed_leads
+        // Build owner + status lookup from processed_leads
         const emails = leads.map(l => l.email).filter(Boolean);
         const { data: processedLeads } = await supabase
           .from('processed_leads')
-          .select('email, owner')
+          .select('email, owner, status')
           .in('email', emails.slice(0, 100)); // Limit batch size
 
         const ownerByEmail = {};
+        const statusByEmail = {};
         (processedLeads || []).forEach(pl => {
-          ownerByEmail[pl.email?.toLowerCase()] = pl.owner;
+          const e = pl.email?.toLowerCase();
+          ownerByEmail[e] = pl.owner;
+          statusByEmail[e] = pl.status;
         });
 
         // Map Lemlist lead statuses to activity records
@@ -260,6 +263,44 @@ class SyncService {
             logger.error({ error: error.message, campaignId }, 'Failed to insert synced activities');
           } else {
             synced += activitiesToInsert.length;
+          }
+        }
+
+        // Detect sequence_finished leads from Lemlist export data
+        // Lemlist marks leads as done/finished when all steps have been sent
+        const finishedEmails = [];
+        for (const lead of leads) {
+          if (!lead.email) continue;
+          const email = lead.email.toLowerCase().trim();
+          const currentStatus = statusByEmail[email];
+
+          // Skip if already meeting_booked (higher priority status)
+          if (currentStatus === 'meeting_booked') continue;
+          // Skip if already sequence_finished
+          if (currentStatus === 'sequence_finished') continue;
+
+          // Lemlist export uses various flags for sequence completion
+          const isFinished = lead.isFinished || lead.isDone ||
+            lead.leadStatus === 'notInterested' ||
+            lead.leadStatus === 'interested' ||
+            lead.sequenceCompleted === true;
+
+          if (isFinished) {
+            finishedEmails.push(email);
+          }
+        }
+
+        if (finishedEmails.length > 0) {
+          const { error: statusError } = await supabase
+            .from('processed_leads')
+            .update({ status: 'sequence_finished' })
+            .in('email', finishedEmails)
+            .neq('status', 'meeting_booked');
+
+          if (statusError) {
+            logger.error({ error: statusError.message }, 'Failed to update sequence_finished statuses');
+          } else {
+            logger.info({ count: finishedEmails.length }, 'Updated leads to sequence_finished');
           }
         }
       }

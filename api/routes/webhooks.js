@@ -137,6 +137,45 @@ router.post('/lemlist/activity', async (req, res) => {
 });
 
 /**
+ * POST /api/webhooks/lemlist/sequence-done
+ * Handle Lemlist sequence done webhooks (all emails sent to a lead)
+ *
+ * Configure in Lemlist:
+ * 1. Go to Settings -> Integrations -> Webhooks
+ * 2. Add new webhook for event: emailsSendingDone
+ * 3. Set URL to: https://your-api.vercel.app/api/webhooks/lemlist/sequence-done
+ */
+router.post('/lemlist/sequence-done', async (req, res) => {
+  try {
+    const payload = req.body;
+
+    logger.info({
+      event: payload.type || payload.event,
+      email: payload.email || payload.leadEmail
+    }, 'Received Lemlist sequence done webhook');
+
+    if (!payload) {
+      return res.status(400).json({ error: 'Empty payload' });
+    }
+
+    const result = await webhookService.handleLemlistSequenceDone(payload);
+
+    res.json({
+      success: true,
+      message: 'Sequence done recorded',
+      result
+    });
+
+  } catch (error) {
+    logger.error({ error: error.message, stack: error.stack }, 'Lemlist sequence done webhook error');
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/webhooks/health
  * Health check for webhook endpoint
  */

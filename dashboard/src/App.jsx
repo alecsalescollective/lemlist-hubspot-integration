@@ -11,6 +11,7 @@ import LeadOverview from './components/dashboard/LeadOverview';
 import CampaignTable from './components/dashboard/CampaignTable';
 import LeadActivityFeed from './components/dashboard/LeadActivityFeed';
 import MeetingsBooked from './components/dashboard/MeetingsBooked';
+import PipelineSection from './components/dashboard/PipelineSection';
 import { layout } from './styles/designTokens';
 import { useAutoSync } from './hooks/useSync';
 
@@ -47,6 +48,11 @@ function Dashboard() {
       <div className={`${layout.grid2} ${layout.sectionGap}`}>
         <LeadActivityFeed />
         <MeetingsBooked />
+      </div>
+
+      {/* Pipeline Section - Salesforce data */}
+      <div className={layout.sectionMargin}>
+        <PipelineSection />
       </div>
     </Layout>
   );

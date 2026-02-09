@@ -50,7 +50,17 @@ class WebhookService {
     // 1. Store meeting in database
     const meetingResult = await this.storeMeetingFromWebhook(payload, email);
 
-    // 2. Mark lead as interested in lemlist
+    // 2. Update lead status to meeting_booked in processed_leads
+    try {
+      await supabase
+        .from('processed_leads')
+        .update({ status: 'meeting_booked' })
+        .eq('email', email.toLowerCase().trim());
+    } catch (err) {
+      logger.warn({ email, error: err.message }, 'Failed to update lead status to meeting_booked');
+    }
+
+    // 3. Mark lead as interested in lemlist
     let interestedResult = null;
     try {
       interestedResult = await this.markLeadInterested(email);
@@ -234,6 +244,42 @@ class WebhookService {
     }
 
     return null;
+  }
+
+  /**
+   * Handle Lemlist sequence done webhook
+   * Fires when all emails in a sequence have been sent to a lead
+   */
+  async handleLemlistSequenceDone(payload) {
+    const { supabase } = getClients();
+
+    const email = payload.email || payload.leadEmail;
+    if (!email) {
+      logger.warn({ payload }, 'No email in sequence done payload');
+      return { success: false, message: 'No email found' };
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    logger.info({ email: normalizedEmail }, 'Processing sequence done webhook');
+
+    // Only update to sequence_finished if not already meeting_booked
+    const { data: lead } = await supabase
+      .from('processed_leads')
+      .select('status')
+      .eq('email', normalizedEmail)
+      .limit(1)
+      .single();
+
+    if (lead && lead.status !== 'meeting_booked') {
+      await supabase
+        .from('processed_leads')
+        .update({ status: 'sequence_finished' })
+        .eq('email', normalizedEmail);
+
+      logger.info({ email: normalizedEmail }, 'Lead status updated to sequence_finished');
+    }
+
+    return { success: true, email: normalizedEmail, status: 'sequence_finished' };
   }
 
   /**

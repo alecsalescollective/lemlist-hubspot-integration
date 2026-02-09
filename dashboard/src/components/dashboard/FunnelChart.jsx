@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, ArrowRight, ArrowDown, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight, ArrowDown, Activity, Lock } from 'lucide-react';
 import { useFunnelStats } from '../../hooks/useFunnel';
 import { useTriggerSync } from '../../hooks/useSync';
 import { useFilters } from '../../context/FilterContext';
@@ -22,7 +22,7 @@ export default function FunnelChart() {
     return (
       <div className={`${card.base} p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8`}>
         <h2 className={`${typography.pageTitle} mb-4 sm:mb-6`}>Sales Funnel</h2>
-        <SkeletonFunnel stages={3} />
+        <SkeletonFunnel stages={6} />
       </div>
     );
   }
@@ -61,14 +61,33 @@ export default function FunnelChart() {
     );
   }
 
-  // Prepare data for the horizontal bar chart
-  const maxCount = Math.max(...stages.map((s) => s.count), 1);
-  const chartData = stages.map((stage) => ({
+  // Prepare data for the horizontal bar chart (exclude Salesforce placeholders with 0 count)
+  const activeStages = stages.filter(s => !s.salesforce || s.count > 0);
+  const maxCount = Math.max(...activeStages.map((s) => s.count), 1);
+  const chartData = activeStages.map((stage) => ({
     ...stage,
     percentage: Math.round((stage.count / maxCount) * 100),
   }));
 
   const leadToMeetingRate = conversions.leadToMeeting || 0;
+
+  // Map conversion rates between adjacent stages
+  const conversionBetween = (index) => {
+    const stage = stages[index];
+    const nextStage = stages[index + 1];
+    if (!stage || !nextStage) return null;
+
+    const pairs = {
+      'Total Leads→In Sequence': conversions.leadToSequence,
+      'In Sequence→Sequence Finished': conversions.sequenceFinished,
+      'Sequence Finished→Meeting Booked': conversions.sequenceToMeeting,
+      'Meeting Booked→Meeting Held': conversions.meetingToHeld,
+      'Meeting Held→Qualified': conversions.heldToQualified,
+    };
+
+    const key = `${stage.name}→${nextStage.name}`;
+    return pairs[key];
+  };
 
   return (
     <div className={`${card.base} p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8`}>
@@ -109,46 +128,53 @@ export default function FunnelChart() {
 
       {/* Funnel Visualization - Desktop */}
       <div
-        className="hidden md:flex items-center justify-center gap-4 mb-6 lg:mb-8"
+        className="hidden md:flex items-center justify-center gap-2 lg:gap-3 mb-6 lg:mb-8 overflow-x-auto"
         role="img"
-        aria-label={`Sales funnel showing ${chartData.map((s) => `${s.name}: ${s.count}`).join(', ')}`}
+        aria-label={`Sales funnel showing ${stages.map((s) => `${s.name}: ${s.count}`).join(', ')}`}
       >
-        {chartData.map((stage, index) => (
-          <div key={stage.name} className="flex items-center">
+        {stages.map((stage, index) => (
+          <div key={stage.name} className="flex items-center flex-shrink-0">
             {/* Stage Box */}
             <div className="text-center">
               <div
-                className={`rounded-lg px-6 lg:px-8 py-4 lg:py-5 min-w-[150px] lg:min-w-[180px] ${interactive.transition}`}
+                className={`rounded-lg px-4 lg:px-5 py-3 lg:py-4 min-w-[120px] lg:min-w-[140px] ${interactive.transition} ${
+                  stage.salesforce ? 'opacity-50' : ''
+                }`}
                 style={{
                   backgroundColor: `${stage.color}15`,
                   borderLeft: `4px solid ${stage.color}`,
                 }}
               >
                 <div
-                  className="text-2xl lg:text-3xl font-bold"
+                  className="text-xl lg:text-2xl font-bold flex items-center justify-center gap-1"
                   style={{ color: stage.color }}
                 >
+                  {stage.salesforce && stage.count === 0 && (
+                    <Lock className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
+                  )}
                   {stage.count.toLocaleString()}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 font-medium">
+                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">
                   {stage.name}
                 </div>
+                {stage.salesforce && stage.count === 0 && (
+                  <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Salesforce</div>
+                )}
               </div>
             </div>
 
             {/* Arrow with conversion rate */}
-            {index < chartData.length - 1 && (
-              <div className="flex flex-col items-center mx-2 lg:mx-4">
+            {index < stages.length - 1 && (
+              <div className="flex flex-col items-center mx-1 lg:mx-2">
                 <ArrowRight
-                  className={`${iconSizes.lg} text-gray-400 dark:text-gray-500`}
+                  className={`${iconSizes.md} text-gray-400 dark:text-gray-500`}
                   aria-hidden="true"
                 />
-                <span className={`${typography.small} mt-1`}>
-                  {index === 0
-                    ? conversions.leadToSequence
-                    : conversions.sequenceToMeeting}
-                  %
-                </span>
+                {conversionBetween(index) != null && (
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    {conversionBetween(index)}%
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -159,21 +185,26 @@ export default function FunnelChart() {
       <div
         className="flex md:hidden flex-col items-center gap-2 mb-6"
         role="img"
-        aria-label={`Sales funnel showing ${chartData.map((s) => `${s.name}: ${s.count}`).join(', ')}`}
+        aria-label={`Sales funnel showing ${stages.map((s) => `${s.name}: ${s.count}`).join(', ')}`}
       >
-        {chartData.map((stage, index) => (
+        {stages.map((stage, index) => (
           <div key={stage.name} className="flex flex-col items-center w-full">
             {/* Stage Box */}
             <div
-              className={`rounded-lg px-4 py-3 w-full ${interactive.transition}`}
+              className={`rounded-lg px-4 py-3 w-full ${interactive.transition} ${
+                stage.salesforce ? 'opacity-50' : ''
+              }`}
               style={{
                 backgroundColor: `${stage.color}15`,
                 borderLeft: `4px solid ${stage.color}`,
               }}
             >
               <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+                <div className="text-sm text-gray-600 dark:text-gray-400 font-medium flex items-center gap-1">
                   {stage.name}
+                  {stage.salesforce && stage.count === 0 && (
+                    <Lock className="w-3 h-3 opacity-50" aria-hidden="true" />
+                  )}
                 </div>
                 <div
                   className="text-xl font-bold"
@@ -185,25 +216,24 @@ export default function FunnelChart() {
             </div>
 
             {/* Arrow with conversion rate */}
-            {index < chartData.length - 1 && (
+            {index < stages.length - 1 && (
               <div className="flex items-center gap-2 my-1">
                 <ArrowDown
                   className={`${iconSizes.sm} text-gray-400 dark:text-gray-500`}
                   aria-hidden="true"
                 />
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {index === 0
-                    ? conversions.leadToSequence
-                    : conversions.sequenceToMeeting}
-                  %
-                </span>
+                {conversionBetween(index) != null && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {conversionBetween(index)}%
+                  </span>
+                )}
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Bar Chart Representation - hidden on mobile for cleaner look */}
+      {/* Bar Chart Representation - hidden on mobile, uses active stages only */}
       <div className="hidden sm:block h-16 lg:h-20 mt-4 lg:mt-6" aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} layout="vertical" barGap={0}>
@@ -229,10 +259,10 @@ export default function FunnelChart() {
         </ResponsiveContainer>
       </div>
 
-      {/* Conversion Summary - responsive grid */}
+      {/* Conversion Summary */}
       <div className="grid grid-cols-3 gap-2 sm:gap-6 mt-4 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-100 dark:border-gray-700">
         <div className="text-center">
-          <div className="text-xs sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             <span className="hidden sm:inline">Lead to Sequence</span>
             <span className="sm:hidden">Lead→Seq</span>
           </div>
@@ -241,7 +271,7 @@ export default function FunnelChart() {
           </div>
         </div>
         <div className="text-center">
-          <div className="text-xs sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             <span className="hidden sm:inline">Sequence to Meeting</span>
             <span className="sm:hidden">Seq→Mtg</span>
           </div>
@@ -250,7 +280,7 @@ export default function FunnelChart() {
           </div>
         </div>
         <div className="text-center">
-          <div className="text-xs sm:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             <span className="hidden sm:inline">Overall Conversion</span>
             <span className="sm:hidden">Overall</span>
           </div>

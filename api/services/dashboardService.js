@@ -477,8 +477,9 @@ class DashboardService {
   // ==========================================
 
   /**
-   * Get funnel statistics: Leads -> In Sequence -> Meetings Booked
-   * Note: Funnel ends at meetings booked - outcomes require Salesforce integration
+   * Get funnel statistics:
+   * Total Leads -> In Sequence -> Sequence Finished -> Meeting Booked -> Meeting Held -> Qualified
+   * Meeting Held and Qualified are from Salesforce (pipeline_opportunities table, placeholder until integrated)
    */
   async getFunnelStats(owner = null, dateRange = '30d') {
     const dateFilter = this.getDateFilter(dateRange);
@@ -499,10 +500,15 @@ class DashboardService {
     const { data: leads, count: totalLeads, error: leadsError } = await leadsQuery;
     if (leadsError) throw leadsError;
 
-    // Stage 2: In Sequence (leads with campaign_id in processed_leads)
+    // Stage 2: In Sequence (leads with campaign_id)
     const inSequence = (leads || []).filter(l => l.campaign_id).length;
 
-    // Stage 3: Meetings Booked (from meetings table)
+    // Stage 3: Sequence Finished (status is sequence_finished OR meeting_booked — they all completed the sequence)
+    const sequenceFinished = (leads || []).filter(l =>
+      l.status === 'sequence_finished' || l.status === 'meeting_booked'
+    ).length;
+
+    // Stage 4: Meetings Booked (from meetings table)
     let meetingsQuery = getSupabase()
       .from('meetings')
       .select('*', { count: 'exact' });
@@ -516,6 +522,32 @@ class DashboardService {
 
     const { count: totalMeetings, error: meetingsError } = await meetingsQuery;
     if (meetingsError) throw meetingsError;
+
+    // Stage 5 & 6: Meeting Held & Qualified (from pipeline_opportunities — Salesforce)
+    let meetingsHeld = 0;
+    let qualifiedCount = 0;
+    let pipelineValue = 0;
+    try {
+      let pipelineQuery = getSupabase()
+        .from('pipeline_opportunities')
+        .select('stage, pipeline_value');
+
+      if (owner && owner !== 'all') {
+        pipelineQuery = pipelineQuery.eq('owner', owner);
+      }
+      if (dateFilter) {
+        pipelineQuery = pipelineQuery.gte('created_at', dateFilter);
+      }
+
+      const { data: pipelineData } = await pipelineQuery;
+      if (pipelineData) {
+        meetingsHeld = pipelineData.filter(p => p.stage === 'meeting_held' || p.stage === 'qualified' || p.stage === 'closed_won').length;
+        qualifiedCount = pipelineData.filter(p => p.stage === 'qualified' || p.stage === 'closed_won').length;
+        pipelineValue = pipelineData.reduce((sum, p) => sum + (parseFloat(p.pipeline_value) || 0), 0);
+      }
+    } catch {
+      // Table might not exist yet
+    }
 
     // Previous period for trend calculation
     let prevLeadsQuery = getSupabase()
@@ -553,8 +585,20 @@ class DashboardService {
       ? Math.round((inSequence / totalLeads) * 1000) / 10
       : 0;
 
-    const sequenceToMeetingRate = inSequence > 0
-      ? Math.round(((totalMeetings || 0) / inSequence) * 1000) / 10
+    const sequenceFinishedRate = inSequence > 0
+      ? Math.round((sequenceFinished / inSequence) * 1000) / 10
+      : 0;
+
+    const sequenceToMeetingRate = sequenceFinished > 0
+      ? Math.round(((totalMeetings || 0) / sequenceFinished) * 1000) / 10
+      : (inSequence > 0 ? Math.round(((totalMeetings || 0) / inSequence) * 1000) / 10 : 0);
+
+    const meetingToHeldRate = (totalMeetings || 0) > 0
+      ? Math.round((meetingsHeld / totalMeetings) * 1000) / 10
+      : 0;
+
+    const heldToQualifiedRate = meetingsHeld > 0
+      ? Math.round((qualifiedCount / meetingsHeld) * 1000) / 10
       : 0;
 
     const leadToMeetingRate = (totalLeads || 0) > 0
@@ -572,12 +616,23 @@ class DashboardService {
       stages: [
         { name: 'Total Leads', count: totalLeads || 0, color: '#6B7280' },
         { name: 'In Sequence', count: inSequence, color: '#3B82F6' },
-        { name: 'Meetings Booked', count: totalMeetings || 0, color: '#10B981' }
+        { name: 'Sequence Finished', count: sequenceFinished, color: '#8B5CF6' },
+        { name: 'Meeting Booked', count: totalMeetings || 0, color: '#10B981' },
+        { name: 'Meeting Held', count: meetingsHeld, color: '#F59E0B', salesforce: true },
+        { name: 'Qualified', count: qualifiedCount, color: '#EF4444', salesforce: true }
       ],
       conversions: {
         leadToSequence: leadToSequenceRate,
+        sequenceFinished: sequenceFinishedRate,
         sequenceToMeeting: sequenceToMeetingRate,
+        meetingToHeld: meetingToHeldRate,
+        heldToQualified: heldToQualifiedRate,
         leadToMeeting: leadToMeetingRate
+      },
+      pipeline: {
+        meetingsHeld,
+        qualified: qualifiedCount,
+        value: pipelineValue
       },
       trend: {
         leadToMeeting: Math.round(leadToMeetingTrend * 10) / 10
