@@ -111,6 +111,16 @@ class LemlistClient {
   }
 
   /**
+   * Get stats for a single campaign
+   * @param {string} campaignId - Campaign ID
+   * @returns {Promise<Object>} - Campaign stats
+   */
+  async getCampaignStats(campaignId) {
+    const response = await this.client.get(`/campaigns/${campaignId}/stats`);
+    return response.data || {};
+  }
+
+  /**
    * Get all leads in a campaign with their activity statuses
    * @param {string} campaignId - Campaign ID
    * @returns {Promise<Array>} - Array of leads with statuses

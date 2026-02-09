@@ -110,6 +110,7 @@ class SyncService {
       let reportsMap = {};
 
       if (campaignIds.length > 0) {
+        // Try batch reports endpoint first
         try {
           const reports = await lemlist.getCampaignReports(campaignIds);
           for (const report of (reports || [])) {
@@ -117,7 +118,24 @@ class SyncService {
           }
           logger.info({ count: Object.keys(reportsMap).length }, 'Fetched campaign reports with metrics');
         } catch (error) {
-          logger.warn({ error: error.message }, 'Failed to fetch campaign reports, metrics will be 0');
+          logger.warn({ error: error.message }, 'Failed to fetch batch campaign reports');
+        }
+
+        // Fall back to per-campaign stats for any missing data
+        for (const cid of campaignIds) {
+          const existing = reportsMap[cid] || {};
+          const hasReplied = existing.emailsReplied || existing.replied || existing.emailsRepliedCount;
+          if (!hasReplied) {
+            try {
+              const stats = await lemlist.getCampaignStats(cid);
+              if (stats && Object.keys(stats).length > 0) {
+                logger.info({ campaignId: cid, statsKeys: Object.keys(stats), stats }, 'Raw per-campaign stats');
+                reportsMap[cid] = { ...existing, ...stats, _id: cid };
+              }
+            } catch (err) {
+              // Stats endpoint may not exist, skip
+            }
+          }
         }
       }
 
@@ -131,11 +149,17 @@ class SyncService {
         // Get metrics from reports endpoint (has actual stats)
         const report = reportsMap[campaign._id] || {};
 
-        const emailsSent = report.emailsSent || 0;
-        const emailsOpened = report.emailsOpened || 0;
-        const emailsReplied = report.emailsReplied || 0;
-        const emailsBounced = report.emailsBounced || 0;
-        const leadsCount = report.totalCount || 0;
+        // Log raw report to debug field names
+        if (Object.keys(report).length > 0) {
+          logger.info({ campaignId: campaign._id, reportKeys: Object.keys(report), report }, 'Raw campaign report data');
+        }
+
+        // Try multiple possible field names from Lemlist API
+        const emailsSent = report.emailsSent || report.sent || report.emailsSentCount || 0;
+        const emailsOpened = report.emailsOpened || report.opened || report.emailsOpenedCount || 0;
+        const emailsReplied = report.emailsReplied || report.replied || report.emailsRepliedCount || 0;
+        const emailsBounced = report.emailsBounced || report.bounced || report.emailsBouncedCount || 0;
+        const leadsCount = report.totalCount || report.leadsCount || report.leadCount || 0;
 
         const openRate = emailsSent > 0 ? Math.round((emailsOpened / emailsSent) * 1000) / 10 : 0;
         const replyRate = emailsSent > 0 ? Math.round((emailsReplied / emailsSent) * 1000) / 10 : 0;

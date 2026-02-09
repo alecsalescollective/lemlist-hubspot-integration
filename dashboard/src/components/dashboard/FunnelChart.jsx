@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, ArrowRight, ArrowDown, Activity, Lock } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight, ArrowDown, Activity } from 'lucide-react';
 import { useFunnelStats } from '../../hooks/useFunnel';
 import { useTriggerSync } from '../../hooks/useSync';
 import { useFilters } from '../../context/FilterContext';
@@ -61,10 +61,9 @@ export default function FunnelChart() {
     );
   }
 
-  // Prepare data for the horizontal bar chart (exclude Salesforce placeholders with 0 count)
-  const activeStages = stages.filter(s => !s.salesforce || s.count > 0);
-  const maxCount = Math.max(...activeStages.map((s) => s.count), 1);
-  const chartData = activeStages.map((stage) => ({
+  // Prepare data for the horizontal bar chart (show all stages)
+  const maxCount = Math.max(...stages.map((s) => s.count), 1);
+  const chartData = stages.map((stage) => ({
     ...stage,
     percentage: Math.round((stage.count / maxCount) * 100),
   }));
@@ -137,9 +136,7 @@ export default function FunnelChart() {
             {/* Stage Box */}
             <div className="text-center">
               <div
-                className={`rounded-lg px-4 lg:px-5 py-3 lg:py-4 min-w-[120px] lg:min-w-[140px] ${interactive.transition} ${
-                  stage.salesforce ? 'opacity-50' : ''
-                }`}
+                className={`rounded-lg px-4 lg:px-5 py-3 lg:py-4 min-w-[120px] lg:min-w-[140px] ${interactive.transition}`}
                 style={{
                   backgroundColor: `${stage.color}15`,
                   borderLeft: `4px solid ${stage.color}`,
@@ -149,17 +146,11 @@ export default function FunnelChart() {
                   className="text-xl lg:text-2xl font-bold flex items-center justify-center gap-1"
                   style={{ color: stage.color }}
                 >
-                  {stage.salesforce && stage.count === 0 && (
-                    <Lock className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
-                  )}
                   {stage.count.toLocaleString()}
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">
                   {stage.name}
                 </div>
-                {stage.salesforce && stage.count === 0 && (
-                  <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Salesforce</div>
-                )}
               </div>
             </div>
 
@@ -191,9 +182,7 @@ export default function FunnelChart() {
           <div key={stage.name} className="flex flex-col items-center w-full">
             {/* Stage Box */}
             <div
-              className={`rounded-lg px-4 py-3 w-full ${interactive.transition} ${
-                stage.salesforce ? 'opacity-50' : ''
-              }`}
+              className={`rounded-lg px-4 py-3 w-full ${interactive.transition}`}
               style={{
                 backgroundColor: `${stage.color}15`,
                 borderLeft: `4px solid ${stage.color}`,
@@ -202,9 +191,6 @@ export default function FunnelChart() {
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600 dark:text-gray-400 font-medium flex items-center gap-1">
                   {stage.name}
-                  {stage.salesforce && stage.count === 0 && (
-                    <Lock className="w-3 h-3 opacity-50" aria-hidden="true" />
-                  )}
                 </div>
                 <div
                   className="text-xl font-bold"
