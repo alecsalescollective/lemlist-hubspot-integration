@@ -140,19 +140,32 @@ class LemlistClient {
     if (leadData.lastName) payload.lastName = leadData.lastName;
     if (leadData.companyName) payload.companyName = leadData.companyName;
 
-    // Add custom variables if provided
+    // Add enriched fields if available
+    if (leadData.linkedinUrl) payload.linkedinUrl = leadData.linkedinUrl;
+    if (leadData.phone) payload.phone = leadData.phone;
+    if (leadData.jobTitle) payload.jobTitle = leadData.jobTitle;
+
+    // Add all remaining fields as custom variables (AI context, calendar link, etc.)
+    // Lemlist expects custom variables at the root level
+    const standardFields = new Set([
+      'email', 'firstName', 'lastName', 'companyName',
+      'linkedinUrl', 'phone', 'jobTitle',
+      'enriched', 'enrichedAt', 'enrichmentId',
+      'emailVerificationStatus', 'emailVerified', 'customVariables'
+    ]);
+
+    for (const [key, value] of Object.entries(leadData)) {
+      if (!standardFields.has(key) && value !== null && value !== undefined && value !== '') {
+        payload[key] = value;
+      }
+    }
+
+    // Add custom variables if provided (legacy support)
     if (leadData.customVariables && Object.keys(leadData.customVariables).length > 0) {
-      // Filter out empty values
-      const filteredVariables = {};
       for (const [key, value] of Object.entries(leadData.customVariables)) {
         if (value !== null && value !== undefined && value !== '') {
-          filteredVariables[key] = value;
+          payload[key] = value;
         }
-      }
-
-      if (Object.keys(filteredVariables).length > 0) {
-        // Lemlist expects custom variables at the root level
-        Object.assign(payload, filteredVariables);
       }
     }
 
@@ -241,7 +254,8 @@ class LemlistClient {
       lastName: leadData.lastName,
       companyName: leadData.companyName,
       verifyEmail: true,
-      linkedinEnrichment: true
+      linkedinEnrichment: true,
+      findPhone: true
     });
 
     if (!enrichmentJob?.id) {

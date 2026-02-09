@@ -124,7 +124,8 @@ class LemlistClient {
     const queryParams = {
       email: params.email,
       verifyEmail: true,
-      linkedinEnrichment: true
+      linkedinEnrichment: true,
+      findPhone: true
     };
 
     if (params.firstName) queryParams.firstName = params.firstName;
@@ -200,6 +201,7 @@ class LemlistClient {
     const merged = { ...originalData };
 
     const linkedinData = enrichedResult.data?.linkedin || {};
+    const emailData = enrichedResult.data?.email || {};
     const phoneData = enrichedResult.data?.phone || {};
 
     if (linkedinData.firstName && !merged.firstName) merged.firstName = linkedinData.firstName;
@@ -208,6 +210,12 @@ class LemlistClient {
     if (linkedinData.linkedinUrl) merged.linkedinUrl = linkedinData.linkedinUrl;
     if (linkedinData.jobTitle) merged.jobTitle = linkedinData.jobTitle;
     if (phoneData.phone) merged.phone = phoneData.phone;
+
+    // Track email verification status
+    if (emailData.status) {
+      merged.emailVerificationStatus = emailData.status;
+      merged.emailVerified = emailData.status === 'valid' || emailData.status === 'deliverable';
+    }
 
     merged.enriched = true;
     merged.enrichedAt = new Date().toISOString();
