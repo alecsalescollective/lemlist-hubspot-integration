@@ -102,7 +102,7 @@ export default function LeadOverview() {
           <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Owner</h3>
           <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by owner chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ownerData} layout="vertical">
+              <BarChart data={ownerData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
@@ -117,7 +117,7 @@ export default function LeadOverview() {
                   {ownerData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
-                  <LabelList dataKey="count" position="right" fill="#6B7280" fontSize={12} />
+                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -129,7 +129,7 @@ export default function LeadOverview() {
           <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Status</h3>
           <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by status chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusData} layout="vertical">
+              <BarChart data={statusData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
@@ -144,7 +144,7 @@ export default function LeadOverview() {
                   {statusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
-                  <LabelList dataKey="count" position="right" fill="#6B7280" fontSize={12} />
+                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -156,7 +156,7 @@ export default function LeadOverview() {
           <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Source</h3>
           <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by source chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sourceData} layout="vertical">
+              <BarChart data={sourceData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
@@ -172,7 +172,7 @@ export default function LeadOverview() {
                   fill="#14B8A6"
                   radius={chartConfig.barRadius}
                 >
-                  <LabelList dataKey="count" position="right" fill="#6B7280" fontSize={12} />
+                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

@@ -99,6 +99,18 @@ class LemlistClient {
   }
 
   /**
+   * Get campaign reports with metrics for multiple campaigns
+   * @param {string[]} campaignIds - Array of campaign IDs
+   * @returns {Promise<Array>} - Array of campaign reports with metrics
+   */
+  async getCampaignReports(campaignIds) {
+    const response = await this.client.get('/campaigns/reports', {
+      params: { campaignIds: campaignIds.join(',') }
+    });
+    return response.data || [];
+  }
+
+  /**
    * Get all leads in a campaign with their activity statuses
    * @param {string} campaignId - Campaign ID
    * @returns {Promise<Array>} - Array of leads with statuses

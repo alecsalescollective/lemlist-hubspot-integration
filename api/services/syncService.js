@@ -80,7 +80,7 @@ class SyncService {
       // Update status to in_progress
       await this.updateSyncStatus('campaigns', 'in_progress');
 
-      // Fetch campaigns from Lemlist
+      // Fetch campaign list from Lemlist (metadata only, no metrics)
       const campaigns = await lemlist.getCampaigns();
       logger.info({ count: campaigns.length }, 'Fetched campaigns from Lemlist');
 
@@ -93,6 +93,22 @@ class SyncService {
         campaignOwnerMap[campaignId].push(ownerName);
       }
 
+      // Fetch actual metrics via /campaigns/reports endpoint (batched)
+      const campaignIds = campaigns.map(c => c._id);
+      let reportsMap = {};
+
+      if (campaignIds.length > 0) {
+        try {
+          const reports = await lemlist.getCampaignReports(campaignIds);
+          for (const report of (reports || [])) {
+            reportsMap[report._id] = report;
+          }
+          logger.info({ count: Object.keys(reportsMap).length }, 'Fetched campaign reports with metrics');
+        } catch (error) {
+          logger.warn({ error: error.message }, 'Failed to fetch campaign reports, metrics will be 0');
+        }
+      }
+
       let synced = 0;
 
       for (const campaign of campaigns) {
@@ -100,11 +116,14 @@ class SyncService {
         const owners = campaignOwnerMap[campaign._id] || [];
         const owner = owners.length === 1 ? owners[0] : null;
 
-        // Calculate rates
-        const emailsSent = campaign.emailsSent || campaign.totalLeads || 0;
-        const emailsOpened = campaign.emailsOpened || 0;
-        const emailsReplied = campaign.emailsReplied || 0;
-        const emailsBounced = campaign.emailsBounced || 0;
+        // Get metrics from reports endpoint (has actual stats)
+        const report = reportsMap[campaign._id] || {};
+
+        const emailsSent = report.emailsSent || 0;
+        const emailsOpened = report.emailsOpened || 0;
+        const emailsReplied = report.emailsReplied || 0;
+        const emailsBounced = report.emailsBounced || 0;
+        const leadsCount = report.totalCount || 0;
 
         const openRate = emailsSent > 0 ? Math.round((emailsOpened / emailsSent) * 1000) / 10 : 0;
         const replyRate = emailsSent > 0 ? Math.round((emailsReplied / emailsSent) * 1000) / 10 : 0;
@@ -117,7 +136,7 @@ class SyncService {
             name: campaign.name,
             owner,
             status: campaign.status || 'active',
-            leads_count: campaign.totalLeads || 0,
+            leads_count: leadsCount,
             emails_sent: emailsSent,
             emails_opened: emailsOpened,
             emails_replied: emailsReplied,

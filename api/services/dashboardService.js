@@ -137,6 +137,7 @@ class DashboardService {
     let query = getSupabase()
       .from('campaigns')
       .select('*')
+      .neq('status', 'draft')
       .order('synced_at', { ascending: false });
 
     // Don't filter by owner for shared campaigns (all 3 sellers share one campaign)
