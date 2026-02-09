@@ -1,27 +1,28 @@
 /**
  * PerformanceBadge - Shows contextual performance indicators
- * Displays "Strong", "Good", "At Risk", "Critical" based on thresholds
+ * Thresholds are calibrated for inbound sales (warm leads from HubSpot triggers)
  */
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Target } from 'lucide-react';
 import { iconSizes } from '../../styles/designTokens';
 
-// Performance thresholds for different metrics
+// Performance thresholds - calibrated for inbound (warm lead) flow
+// Inbound leads (triggered from HubSpot) convert at higher rates than cold outbound
 export const thresholds = {
   replyRate: {
-    excellent: 15,  // 15%+ is excellent
-    good: 10,       // 10-15% is good
-    warning: 5,     // 5-10% needs attention
-    // Below 5% is critical
+    excellent: 10, // 10%+ is excellent for inbound
+    good: 5,       // 5-10% is solid
+    warning: 2,    // 2-5% needs attention
+    // Below 2% is critical
   },
   meetingRate: {
-    excellent: 8,
-    good: 5,
-    warning: 2,
+    excellent: 5,
+    good: 3,
+    warning: 1,
   },
   conversionRate: {
-    excellent: 12,
-    good: 8,
-    warning: 4,
+    excellent: 8,
+    good: 4,
+    warning: 2,
   },
   openRate: {
     excellent: 50,
@@ -33,7 +34,7 @@ export const thresholds = {
 // Performance levels with styling
 const levels = {
   excellent: {
-    label: 'Excellent',
+    label: 'Strong',
     icon: CheckCircle,
     bg: 'bg-green-100 dark:bg-green-900/30',
     text: 'text-green-700 dark:text-green-300',
@@ -47,14 +48,14 @@ const levels = {
     border: 'border-blue-200 dark:border-blue-800',
   },
   warning: {
-    label: 'At Risk',
-    icon: Minus,
+    label: 'Below Avg',
+    icon: TrendingDown,
     bg: 'bg-amber-100 dark:bg-amber-900/30',
     text: 'text-amber-700 dark:text-amber-300',
     border: 'border-amber-200 dark:border-amber-800',
   },
   critical: {
-    label: 'Critical',
+    label: 'Low',
     icon: AlertTriangle,
     bg: 'bg-red-100 dark:bg-red-900/30',
     text: 'text-red-700 dark:text-red-300',
@@ -76,14 +77,14 @@ export function getPerformanceLevel(value, metricType) {
 }
 
 /**
- * Get benchmark text for a metric
+ * Get benchmark text for a metric (inbound benchmarks)
  */
 export function getBenchmarkText(metricType) {
   const benchmarks = {
-    replyRate: 'Industry avg: 8-12%',
-    meetingRate: 'Industry avg: 4-6%',
-    conversionRate: 'Industry avg: 6-10%',
-    openRate: 'Industry avg: 30-40%',
+    replyRate: 'Inbound avg: 5-10%',
+    meetingRate: 'Inbound avg: 3-5%',
+    conversionRate: 'Inbound avg: 4-8%',
+    openRate: 'Inbound avg: 35-50%',
   };
   return benchmarks[metricType] || '';
 }
@@ -140,8 +141,8 @@ export function PerformanceIndicator({ value, metricType }) {
   return (
     <span
       className={`inline-flex items-center ${config.text}`}
-      title={`Performance: ${config.label}`}
-      aria-label={`Performance level: ${config.label}`}
+      title={`${config.label} (${getBenchmarkText(metricType)})`}
+      aria-label={`Performance: ${config.label}`}
     >
       <Icon className={iconSizes.sm} aria-hidden="true" />
     </span>

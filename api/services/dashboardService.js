@@ -3,6 +3,9 @@ const { createLogger } = require('../utils/logger');
 
 const logger = createLogger('dashboard-service');
 
+// Hard-coded launch date - no data before this is relevant
+const LAUNCH_DATE = '2026-02-09T00:00:00.000Z';
+
 // Lazy initialization for serverless environment
 let supabase;
 
@@ -67,17 +70,31 @@ class DashboardService {
     // Group by owner
     const byOwner = this.groupBy(currentLeads || [], 'owner');
 
-    // Group by lead_source
+    // Group by lead_source with friendly labels
+    const sourceLabels = {
+      'trigger': 'Inbound',
+      'contact_us': 'Contact Us',
+      'manual': 'Manual',
+      'unknown': 'Other'
+    };
     const bySource = this.groupBy(currentLeads || [], 'lead_source');
 
-    // For status, we'll derive from campaign_id presence
-    // If campaign_id exists, they're "in_sequence"
-    const inSequence = (currentLeads || []).filter(l => l.campaign_id).length;
+    // Status: all processed leads are "in sequence" (they go straight to campaign)
+    // Get meeting count for "converted" status
+    let meetingsQuery = getSupabase()
+      .from('meetings')
+      .select('*', { count: 'exact', head: true });
+    if (owner && owner !== 'all') {
+      meetingsQuery = meetingsQuery.eq('owner', owner);
+    }
+    meetingsQuery = meetingsQuery.gte('scheduled_at', LAUNCH_DATE);
+    const { count: meetingCount } = await meetingsQuery;
+
+    const inSequence = totalCount || 0;
+    const converted = meetingCount || 0;
     const byStatus = {
-      new: totalCount - inSequence,
       in_sequence: inSequence,
-      // These would come from meetings table
-      converted: 0
+      meeting_booked: converted
     };
 
     return {
@@ -86,11 +103,11 @@ class DashboardService {
       byOwner: Object.entries(byOwner).map(([owner, leads]) => ({
         owner,
         count: leads.length,
-        delta: 0 // Would need historical data
+        delta: 0
       })),
       byStatus,
       bySource: Object.entries(bySource).map(([source, leads]) => ({
-        source: source || 'unknown',
+        source: sourceLabels[source] || sourceLabels[source?.toLowerCase()] || source || 'Other',
         count: leads.length
       })),
       period: dateRange,
@@ -143,7 +160,12 @@ class DashboardService {
     // Don't filter by owner for shared campaigns (all 3 sellers share one campaign)
     // Per-owner breakdown comes from processed_leads, not campaigns table
 
-    const { data, error } = await query;
+    const { data: rawData, error } = await query;
+
+    // Filter out campaigns with 0 leads and 0 sends (no activity)
+    const data = (rawData || []).filter(c =>
+      (c.leads_count > 0 || c.emails_sent > 0)
+    );
     if (error) throw error;
 
     // Get sync status
@@ -297,6 +319,7 @@ class DashboardService {
     let query = getSupabase()
       .from('meetings')
       .select('*')
+      .gte('scheduled_at', LAUNCH_DATE)
       .order('scheduled_at', { ascending: true });
 
     if (owner && owner !== 'all') {
@@ -566,6 +589,7 @@ class DashboardService {
       let query = getSupabase()
         .from('lead_activities')
         .select('*')
+        .gte('activity_at', LAUNCH_DATE)
         .order('activity_at', { ascending: false })
         .limit(limit);
 
@@ -664,22 +688,30 @@ class DashboardService {
    */
   getDateFilter(dateRange) {
     const now = new Date();
+    let filter;
     switch (dateRange) {
       case 'today':
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        filter = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        break;
       case '7d':
         const week = new Date(now);
         week.setDate(week.getDate() - 7);
-        return week.toISOString();
+        filter = week.toISOString();
+        break;
       case '30d':
         const month = new Date(now);
         month.setDate(month.getDate() - 30);
-        return month.toISOString();
+        filter = month.toISOString();
+        break;
       case 'month':
-        return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        filter = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        break;
       default:
-        return null;
+        filter = LAUNCH_DATE;
+        break;
     }
+    // Never return a date before launch
+    return filter && filter < LAUNCH_DATE ? LAUNCH_DATE : (filter || LAUNCH_DATE);
   }
 
   /**
@@ -688,18 +720,23 @@ class DashboardService {
   getPreviousDateFilter(dateRange) {
     const now = new Date();
     switch (dateRange) {
-      case '7d':
+      case '7d': {
         const weekEnd = new Date(now);
         weekEnd.setDate(weekEnd.getDate() - 7);
         const weekStart = new Date(weekEnd);
         weekStart.setDate(weekStart.getDate() - 7);
-        return { start: weekStart.toISOString(), end: weekEnd.toISOString() };
-      case '30d':
+        // Clamp to launch date
+        const start = weekStart.toISOString() < LAUNCH_DATE ? LAUNCH_DATE : weekStart.toISOString();
+        return { start, end: weekEnd.toISOString() };
+      }
+      case '30d': {
         const monthEnd = new Date(now);
         monthEnd.setDate(monthEnd.getDate() - 30);
         const monthStart = new Date(monthEnd);
         monthStart.setDate(monthStart.getDate() - 30);
-        return { start: monthStart.toISOString(), end: monthEnd.toISOString() };
+        const start = monthStart.toISOString() < LAUNCH_DATE ? LAUNCH_DATE : monthStart.toISOString();
+        return { start, end: monthEnd.toISOString() };
+      }
       default:
         return null;
     }

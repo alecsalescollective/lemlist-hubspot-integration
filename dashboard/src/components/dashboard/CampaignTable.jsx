@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, AlertCircle, Flame, Calendar, BarChart2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Calendar, BarChart2 } from 'lucide-react';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { useTriggerSync } from '../../hooks/useSync';
 import { useFilters } from '../../context/FilterContext';
@@ -207,8 +207,6 @@ export default function CampaignTable() {
                 const replyRate = campaign.metrics?.replyRate || 0;
                 const meetingRate = campaign.metrics?.meetingConversionRate || 0;
                 const meetingsBooked = campaign.metrics?.meetingsBooked || 0;
-                const isLowPerforming = replyRate < 10 && campaign.metrics?.emailsSent > 0;
-                const isHighPerforming = meetingRate >= 5;
 
                 return (
                   <tr key={campaign.id} className={table.bodyRow}>
@@ -218,29 +216,11 @@ export default function CampaignTable() {
                         {campaign.status}
                       </Badge>
                     </td>
-                    {/* Campaign name with indicators */}
+                    {/* Campaign name */}
                     <td className={table.bodyCell}>
-                      <div className="flex items-center gap-2">
-                        <span className={`${typography.tableBody} truncate max-w-[150px] sm:max-w-[200px] lg:max-w-none`} title={campaign.name}>
-                          {campaign.name}
-                        </span>
-                        {isLowPerforming && (
-                          <span title="Low reply rate - needs attention" aria-label="Warning: Low reply rate">
-                            <AlertCircle
-                              className={`${iconSizes.sm} text-red-500 dark:text-red-400 flex-shrink-0`}
-                              aria-hidden="true"
-                            />
-                          </span>
-                        )}
-                        {isHighPerforming && (
-                          <span title="High meeting conversion - top performer" aria-label="High meeting conversion rate">
-                            <Flame
-                              className={`${iconSizes.sm} text-orange-500 dark:text-orange-400 flex-shrink-0`}
-                              aria-hidden="true"
-                            />
-                          </span>
-                        )}
-                      </div>
+                      <span className={`${typography.tableBody} truncate max-w-[150px] sm:max-w-[200px] lg:max-w-none`} title={campaign.name}>
+                        {campaign.name}
+                      </span>
                     </td>
                     {/* Owner - hidden on tablet and below */}
                     <td className={`${table.bodyCellSecondary} capitalize hidden lg:table-cell`}>
@@ -260,15 +240,7 @@ export default function CampaignTable() {
                     {/* Reply % - always visible with performance indicator */}
                     <td className={table.bodyCellRight}>
                       <div className="flex items-center justify-end gap-1.5">
-                        <span
-                          className={
-                            isLowPerforming
-                              ? 'text-red-600 dark:text-red-400 font-medium'
-                              : ''
-                          }
-                        >
-                          {replyRate}%
-                        </span>
+                        <span>{replyRate}%</span>
                         <PerformanceIndicator value={replyRate} metricType="replyRate" />
                       </div>
                     </td>
@@ -285,15 +257,7 @@ export default function CampaignTable() {
                     {/* Meeting % - always visible with performance indicator */}
                     <td className={table.bodyCellRight}>
                       <div className="flex items-center justify-end gap-1.5">
-                        <span
-                          className={
-                            isHighPerforming
-                              ? 'text-green-600 dark:text-green-400 font-medium'
-                              : ''
-                          }
-                        >
-                          {meetingRate}%
-                        </span>
+                        <span>{meetingRate}%</span>
                         <PerformanceIndicator value={meetingRate} metricType="meetingRate" />
                       </div>
                     </td>
