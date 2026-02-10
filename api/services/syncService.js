@@ -248,12 +248,13 @@ class SyncService {
           const contactName = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || null;
           const campaignName = lead.campaignName || null;
 
-          // Check each activity type (CSV fields are strings, check for non-empty timestamps)
+          // Check each activity type (CSV has top-level + step-level fields like openedAt, openedAt1, openedAt2)
+          const hasField = (prefix) => Object.keys(lead).some(k => k.startsWith(prefix) && lead[k]);
           const activityChecks = [
-            { flag: lead.isOpened || lead.emailsOpened > 0 || lead.openedAt, type: 'email_opened' },
-            { flag: lead.isReplied || lead.emailsReplied > 0 || lead.repliedAt, type: 'email_replied' },
-            { flag: lead.linkedinRepliedAt, type: 'linkedin_replied' },
-            { flag: lead.isClicked || lead.emailsClicked > 0 || lead.clickedAt, type: 'email_clicked' },
+            { flag: lead.isOpened || lead.emailsOpened > 0 || hasField('openedAt') || hasField('linkedinOpenedAt'), type: 'email_opened' },
+            { flag: lead.isReplied || lead.emailsReplied > 0 || hasField('repliedAt'), type: 'email_replied' },
+            { flag: hasField('linkedinRepliedAt'), type: 'linkedin_replied' },
+            { flag: lead.isClicked || lead.emailsClicked > 0 || hasField('clickedAt'), type: 'email_clicked' },
           ];
 
           for (const { flag, type } of activityChecks) {
@@ -303,12 +304,15 @@ class SyncService {
           // - They were marked interested/notInterested
           // - All sequence steps were sent (isFinished/isDone)
           // CSV fields are strings: non-empty = truthy
+          // Also check step-level fields (repliedAt1, linkedinRepliedAt2, etc.)
+          const hasReply = Object.keys(lead).some(k =>
+            (k.startsWith('repliedAt') || k.startsWith('linkedinRepliedAt')) && lead[k]
+          );
           const isFinished = lead.isFinished || lead.isDone ||
             lead.leadStatus === 'notInterested' ||
             lead.leadStatus === 'interested' ||
             lead.sequenceCompleted === true ||
-            lead.repliedAt ||           // email reply
-            lead.linkedinRepliedAt ||   // LinkedIn reply
+            hasReply ||                 // any reply (email or LinkedIn, any step)
             lead.meetingBooked ||       // meeting booked
             lead.interestedAt ||        // marked interested
             lead.notInterestedAt;       // marked not interested
@@ -427,7 +431,7 @@ class SyncService {
         } else {
           synced++;
 
-          // Also update lead status to meeting_booked if they exist in processed_leads
+          // Update lead status to meeting_booked
           try {
             await supabase
               .from('processed_leads')
@@ -436,6 +440,15 @@ class SyncService {
               .neq('status', 'meeting_booked');
           } catch {
             // Non-critical
+          }
+
+          // Mark lead as interested in Lemlist → triggers Salesforce opportunity
+          try {
+            await lemlist.markLeadAsInterested(contactEmail);
+            logger.info({ email: contactEmail }, 'Marked lead as interested in Lemlist (meeting booked)');
+          } catch (err) {
+            // Log but don't fail — meeting is still stored
+            logger.warn({ email: contactEmail, error: err.message }, 'Failed to mark lead as interested in Lemlist');
           }
         }
       }
