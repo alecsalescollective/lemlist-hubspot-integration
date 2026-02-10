@@ -288,6 +288,70 @@ router.get('/debug-lemlist-reports', async (req, res) => {
 });
 
 /**
+ * POST /api/sync/backfill-sources
+ * Backfill source_detail from HubSpot for leads missing it
+ */
+router.post('/backfill-sources', async (req, res) => {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const token = process.env.HUBSPOT_ACCESS_TOKEN;
+
+    // Get leads missing source_detail
+    const { data: leads, error } = await supabase
+      .from('processed_leads')
+      .select('contact_id, email, source_detail')
+      .is('source_detail', null);
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.json({ message: 'No leads missing source_detail', updated: 0 });
+    }
+
+    let updated = 0;
+    const results = [];
+
+    for (const lead of leads) {
+      if (!lead.contact_id) continue;
+
+      try {
+        // Look up contact in HubSpot by ID
+        const response = await axios.get(
+          `https://api.hubapi.com/crm/v3/objects/contacts/${lead.contact_id}`,
+          {
+            params: { properties: 'hs_object_source_detail_1,email' },
+            headers: {
+              'Authorization': `Bearer ${token.trim()}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const sourceDetail = response.data?.properties?.hs_object_source_detail_1;
+
+        if (sourceDetail) {
+          await supabase
+            .from('processed_leads')
+            .update({ source_detail: sourceDetail })
+            .eq('contact_id', lead.contact_id);
+
+          updated++;
+          results.push({ email: lead.email, sourceDetail });
+        } else {
+          results.push({ email: lead.email, sourceDetail: null, note: 'No source_detail in HubSpot' });
+        }
+      } catch (err) {
+        results.push({ email: lead.email, error: err.response?.status || err.message });
+      }
+    }
+
+    res.json({ message: `Backfilled ${updated} of ${leads.length} leads`, updated, total: leads.length, results });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/sync/trigger
  * Manually trigger a sync for all data types
  */
