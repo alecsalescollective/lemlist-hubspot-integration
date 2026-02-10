@@ -382,16 +382,29 @@ router.post('/backfill-sfdc-source', async (req, res) => {
       if (!lead.contact_id || !lead.email) continue;
 
       try {
-        // Fetch source__sfdc_contact_record from HubSpot
+        // Fetch source fields from HubSpot
         const hsResponse = await hubspot.client.get(
           `/crm/v3/objects/contacts/${lead.contact_id}`,
-          { params: { properties: 'source__sfdc_contact_record' } }
+          { params: { properties: 'source__sfdc_contact_record,hs_object_source_detail_1' } }
         );
 
-        const sfdcSource = hsResponse.data?.properties?.source__sfdc_contact_record;
+        const hsProps = hsResponse.data?.properties || {};
+        let sfdcSource = hsProps.source__sfdc_contact_record;
+
+        // Fallback: normalize source_detail into standard category
         if (!sfdcSource) {
-          results.push({ email: lead.email, status: 'no_source_in_hubspot' });
-          continue;
+          const detail = hsProps.hs_object_source_detail_1 || '';
+          if (detail.startsWith('LM -') || detail.toLowerCase().includes('lead magnet')) {
+            sfdcSource = 'Lead Magnet';
+          } else if (detail.startsWith('CU -') || detail.toLowerCase().includes('contact us')) {
+            sfdcSource = 'Contact Us';
+          } else if (detail.toLowerCase().includes('referral') || detail.toLowerCase().includes('partner')) {
+            sfdcSource = 'Referral';
+          } else if (detail.toLowerCase().includes('seo') || detail.toLowerCase().includes('organic')) {
+            sfdcSource = 'Referral';
+          } else {
+            sfdcSource = 'Other';
+          }
         }
 
         // Update the lead in Lemlist

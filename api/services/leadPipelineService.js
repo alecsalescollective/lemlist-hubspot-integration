@@ -258,9 +258,10 @@ class LeadPipelineService {
     }
 
     // Add Salesforce source field (maps to Source__c in SF via Lemlist field mapping)
-    if (props.source__sfdc_contact_record) {
-      leadPayload.sfdcSource = String(props.source__sfdc_contact_record);
-    }
+    // Priority: source__sfdc_contact_record → normalized source_detail → "Other"
+    leadPayload.sfdcSource = props.source__sfdc_contact_record
+      ? String(props.source__sfdc_contact_record)
+      : this.normalizeSourceDetail(props.hs_object_source_detail_1);
 
     // Add AI context fields - always send all fields, use empty string if no data
     for (const [lemlistVar, hubspotProp] of Object.entries(routingConfig.ai_context_fields || {})) {
@@ -408,6 +409,22 @@ class LeadPipelineService {
     // For business domains, capitalize the domain name (strip TLD)
     const name = domain.split('.')[0];
     return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  /**
+   * Normalize HubSpot source_detail into standardized categories for Salesforce
+   * Patterns: "LM - ..." → Lead Magnet, "CU - ..." → Contact Us, etc.
+   */
+  normalizeSourceDetail(sourceDetail) {
+    if (!sourceDetail) return 'Other';
+
+    const val = sourceDetail.trim();
+    if (val.startsWith('LM -') || val.toLowerCase().includes('lead magnet')) return 'Lead Magnet';
+    if (val.startsWith('CU -') || val.toLowerCase().includes('contact us')) return 'Contact Us';
+    if (val.toLowerCase().includes('referral') || val.toLowerCase().includes('partner')) return 'Referral';
+    if (val.toLowerCase().includes('seo') || val.toLowerCase().includes('organic')) return 'Referral';
+
+    return 'Other';
   }
 
   /**
