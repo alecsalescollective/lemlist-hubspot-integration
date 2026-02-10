@@ -174,32 +174,44 @@ class WebhookService {
    * @returns {Promise<Object>} - Result
    */
   async markLeadInterested(email) {
-    const { lemlist } = getClients();
+    const { supabase, lemlist } = getClients();
 
     try {
-      // First, check if the lead exists in lemlist
-      const lead = await lemlist.getLeadByEmail(email);
-
-      if (!lead) {
-        logger.warn({ email }, 'Lead not found in lemlist');
-        throw new Error(`Lead not found in lemlist: ${email}`);
+      // Look up campaign_id from processed_leads for campaign-specific endpoint
+      let campaignId = null;
+      try {
+        const { data: leadRecord } = await supabase
+          .from('processed_leads')
+          .select('campaign_id')
+          .eq('email', email.toLowerCase().trim())
+          .limit(1)
+          .single();
+        if (leadRecord?.campaign_id) campaignId = leadRecord.campaign_id;
+      } catch {
+        // Fall through — will try generic endpoint
       }
 
-      logger.info({
-        email,
-        leadId: lead._id,
-        campaignId: lead.campaignId
-      }, 'Found lead in lemlist, marking as interested');
+      // If no campaign_id in DB, try to get it from Lemlist directly
+      if (!campaignId) {
+        const lead = await lemlist.getLeadByEmail(email);
+        if (!lead) {
+          logger.warn({ email }, 'Lead not found in lemlist');
+          throw new Error(`Lead not found in lemlist: ${email}`);
+        }
+        campaignId = lead.campaignId;
+      }
 
-      // Mark the lead as interested
-      const result = await lemlist.markLeadAsInterested(email);
+      logger.info({ email, campaignId }, 'Marking lead as interested in lemlist');
 
-      logger.info({ email, result }, 'Successfully marked lead as interested');
+      // Mark the lead as interested using campaign-specific endpoint
+      const result = await lemlist.markLeadAsInterested(email, campaignId);
+
+      logger.info({ email, campaignId, result }, 'Successfully marked lead as interested');
 
       return {
         success: true,
         email,
-        leadId: lead._id,
+        campaignId,
         status: 'interested',
         message: 'Lead marked as interested - Salesforce sync will create opportunity'
       };
@@ -207,7 +219,6 @@ class WebhookService {
     } catch (error) {
       logger.error({ email, error: error.message }, 'Failed to mark lead as interested');
 
-      // If it's a 404, the lead doesn't exist
       if (error.response?.status === 404) {
         throw new Error(`Lead not found in lemlist: ${email}`);
       }

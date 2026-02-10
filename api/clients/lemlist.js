@@ -26,13 +26,23 @@ class LemlistClient {
   }
 
   /**
-   * Mark a lead as interested
-   * This triggers lemlist's native Salesforce integration to create opportunities
-   * @param {string} leadIdOrEmail - Lead ID or email address
+   * Mark a lead as interested in a specific campaign
+   * Uses the campaign-specific endpoint which reliably updates the lead status
+   * and triggers lemlist's native Salesforce integration to create opportunities
+   *
+   * @param {string} email - Lead email address
+   * @param {string} campaignId - Lemlist campaign ID
    * @returns {Promise<Object>} - API response
    */
-  async markLeadAsInterested(leadIdOrEmail) {
-    const response = await this.client.post(`/leads/interested/${encodeURIComponent(leadIdOrEmail)}`);
+  async markLeadAsInterested(email, campaignId) {
+    if (!campaignId) {
+      // Fallback to generic endpoint (less reliable but better than nothing)
+      const response = await this.client.post(`/leads/interested/${encodeURIComponent(email)}`);
+      return response.data;
+    }
+    const response = await this.client.post(
+      `/campaigns/${campaignId}/leads/${encodeURIComponent(email)}/interested`
+    );
     return response.data;
   }
 

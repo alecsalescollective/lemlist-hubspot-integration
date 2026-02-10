@@ -385,16 +385,18 @@ class SyncService {
           continue;
         }
 
-        // Look up owner from processed_leads
+        // Look up owner and campaign_id from processed_leads
         let owner = null;
+        let campaignId = null;
         try {
           const { data: leadRecord } = await supabase
             .from('processed_leads')
-            .select('owner')
+            .select('owner, campaign_id')
             .eq('email', contactEmail)
             .limit(1)
             .single();
           if (leadRecord?.owner) owner = leadRecord.owner;
+          if (leadRecord?.campaign_id) campaignId = leadRecord.campaign_id;
         } catch {
           // Lead not in our system — still store the meeting
         }
@@ -446,11 +448,11 @@ class SyncService {
 
           // Mark lead as interested in Lemlist → triggers Salesforce opportunity
           try {
-            await lemlist.markLeadAsInterested(contactEmail);
-            logger.info({ email: contactEmail }, 'Marked lead as interested in Lemlist (meeting booked)');
+            await lemlist.markLeadAsInterested(contactEmail, campaignId);
+            logger.info({ email: contactEmail, campaignId }, 'Marked lead as interested in Lemlist (meeting booked)');
           } catch (err) {
             // Log but don't fail — meeting is still stored
-            logger.warn({ email: contactEmail, error: err.message }, 'Failed to mark lead as interested in Lemlist');
+            logger.warn({ email: contactEmail, campaignId, error: err.message }, 'Failed to mark lead as interested in Lemlist');
           }
         }
       }
