@@ -384,7 +384,7 @@ class SyncService {
       let synced = 0;
 
       for (const meeting of meetings) {
-        const meetingId = meeting._id || meeting.id;
+        const meetingId = meeting._id || meeting.id || `lemcal_${Date.now()}_${synced}`;
 
         // Skip excluded test meetings
         if (excludedMeetingIds.has(meetingId)) {
@@ -414,8 +414,6 @@ class SyncService {
         } catch {
           // Lead not in our system — still store the meeting
         }
-
-        const meetingId = meeting._id || meeting.id || `lemcal_${Date.now()}_${synced}`;
 
         // Extract contact name from the non-owner attendee
         let contactName = null;

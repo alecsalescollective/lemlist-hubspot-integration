@@ -10,22 +10,9 @@ const app = express();
 const PORT = process.env.API_PORT || 3001;
 
 // Middleware - CORS configuration
-// Accept FRONTEND_URL and all Vercel preview/production deployments
-const allowedOrigins = [
-  process.env.FRONTEND_URL?.replace(/\/$/, ''),
-  /\.vercel\.app$/
-].filter(Boolean);
-
+// Reflect requesting origin (internal dashboard API)
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (curl, server-to-server)
-    if (!origin) return callback(null, true);
-    // Check against allowed list
-    const allowed = allowedOrigins.some(o =>
-      o instanceof RegExp ? o.test(origin) : o === origin
-    );
-    callback(null, allowed || false);
-  },
+  origin: true,
   credentials: true
 }));
 app.use(express.json());
