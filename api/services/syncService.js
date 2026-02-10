@@ -121,22 +121,6 @@ class SyncService {
           logger.warn({ error: error.message }, 'Failed to fetch batch campaign reports');
         }
 
-        // Fall back to per-campaign stats for any missing data
-        for (const cid of campaignIds) {
-          const existing = reportsMap[cid] || {};
-          const hasReplied = existing.emailsReplied || existing.replied || existing.emailsRepliedCount;
-          if (!hasReplied) {
-            try {
-              const stats = await lemlist.getCampaignStats(cid);
-              if (stats && Object.keys(stats).length > 0) {
-                logger.info({ campaignId: cid, statsKeys: Object.keys(stats), stats }, 'Raw per-campaign stats');
-                reportsMap[cid] = { ...existing, ...stats, _id: cid };
-              }
-            } catch (err) {
-              // Stats endpoint may not exist, skip
-            }
-          }
-        }
       }
 
       let synced = 0;
@@ -149,16 +133,11 @@ class SyncService {
         // Get metrics from reports endpoint (has actual stats)
         const report = reportsMap[campaign._id] || {};
 
-        // Log raw report to debug field names
-        if (Object.keys(report).length > 0) {
-          logger.info({ campaignId: campaign._id, reportKeys: Object.keys(report), report }, 'Raw campaign report data');
-        }
-
-        // Try multiple possible field names from Lemlist API
-        const emailsSent = report.emailsSent || report.sent || report.emailsSentCount || 0;
-        const emailsOpened = report.emailsOpened || report.opened || report.emailsOpenedCount || 0;
-        const emailsReplied = report.emailsReplied || report.replied || report.emailsRepliedCount || 0;
-        const emailsBounced = report.emailsBounced || report.bounced || report.emailsBouncedCount || 0;
+        // Aggregate across all channels (email + LinkedIn + WhatsApp + SMS)
+        const emailsSent = (report.emailsSent || 0) + (report.linkedinSent || 0);
+        const emailsOpened = (report.emailsOpened || 0) + (report.linkedinOpened || 0);
+        const emailsReplied = (report.emailsReplied || 0) + (report.linkedinReplied || 0) + (report.whatsappReplied || 0) + (report.smsReplied || 0);
+        const emailsBounced = report.emailsBounced || 0;
         const leadsCount = report.totalCount || report.leadsCount || report.leadCount || 0;
 
         const openRate = emailsSent > 0 ? Math.round((emailsOpened / emailsSent) * 1000) / 10 : 0;
