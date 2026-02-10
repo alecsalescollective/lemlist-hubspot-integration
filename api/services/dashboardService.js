@@ -622,13 +622,10 @@ class DashboardService {
       ? Math.round((inSequence / totalLeads) * 1000) / 10
       : 0;
 
-    const sequenceFinishedRate = inSequence > 0
-      ? Math.round((sequenceFinished / inSequence) * 1000) / 10
+    // Sequence to Meeting = meetings / in_sequence (not through sequence_finished)
+    const sequenceToMeetingRate = inSequence > 0
+      ? Math.round(((totalMeetings || 0) / inSequence) * 1000) / 10
       : 0;
-
-    const sequenceToMeetingRate = sequenceFinished > 0
-      ? Math.round(((totalMeetings || 0) / sequenceFinished) * 1000) / 10
-      : (inSequence > 0 ? Math.round(((totalMeetings || 0) / inSequence) * 1000) / 10 : 0);
 
     const meetingToHeldRate = (totalMeetings || 0) > 0
       ? Math.round((meetingsHeld / totalMeetings) * 1000) / 10
@@ -653,14 +650,14 @@ class DashboardService {
       stages: [
         { name: 'Total Leads', count: totalLeads || 0, color: '#6B7280' },
         { name: 'In Sequence', count: inSequence, color: '#3B82F6' },
-        { name: 'Sequence Finished', count: sequenceFinished, color: '#8B5CF6' },
         { name: 'Meeting Booked', count: totalMeetings || 0, color: '#10B981' },
         { name: 'Meeting Held', count: meetingsHeld, color: '#F59E0B', salesforce: true },
         { name: 'Qualified', count: qualifiedCount, color: '#EF4444', salesforce: true }
       ],
+      // Sequence Finished is a standalone metric, not a funnel stage
+      sequenceFinished,
       conversions: {
         leadToSequence: leadToSequenceRate,
-        sequenceFinished: sequenceFinishedRate,
         sequenceToMeeting: sequenceToMeetingRate,
         meetingToHeld: meetingToHeldRate,
         heldToQualified: heldToQualifiedRate,

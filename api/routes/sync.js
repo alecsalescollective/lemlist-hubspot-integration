@@ -352,6 +352,22 @@ router.post('/backfill-sources', async (req, res) => {
 });
 
 /**
+ * GET /api/sync/debug-lemcal
+ * Debug: Show raw Lemcal meeting data
+ */
+router.get('/debug-lemcal', async (req, res) => {
+  try {
+    const LemcalClient = require('../clients/lemcal');
+    const { config } = require('../config');
+    const lemcal = new LemcalClient(config.lemcal);
+    const meetings = await lemcal.getMeetings();
+    res.json({ count: meetings.length, meetings });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/sync/trigger
  * Manually trigger a sync for all data types
  */

@@ -44,6 +44,7 @@ export default function FunnelChart() {
   const stages = data?.stages || [];
   const conversions = data?.conversions || {};
   const trend = data?.trend?.leadToMeeting || 0;
+  const sequenceFinished = data?.sequenceFinished || 0;
 
   // Empty state with action
   if (stages.length === 0) {
@@ -78,8 +79,7 @@ export default function FunnelChart() {
 
     const pairs = {
       'Total Leads→In Sequence': conversions.leadToSequence,
-      'In Sequence→Sequence Finished': conversions.sequenceFinished,
-      'Sequence Finished→Meeting Booked': conversions.sequenceToMeeting,
+      'In Sequence→Meeting Booked': conversions.sequenceToMeeting,
       'Meeting Booked→Meeting Held': conversions.meetingToHeld,
       'Meeting Held→Qualified': conversions.heldToQualified,
     };
