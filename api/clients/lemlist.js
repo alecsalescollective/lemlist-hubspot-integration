@@ -64,13 +64,21 @@ class LemlistClient {
   }
 
   /**
-   * Update lead data
-   * @param {string} leadIdOrEmail - Lead ID or email
+   * Update lead data (campaign-specific endpoint required for custom fields)
+   * @param {string} email - Lead email
    * @param {Object} data - Data to update
+   * @param {string} campaignId - Campaign ID (required for custom field updates)
    * @returns {Promise<Object>} - Updated lead
    */
-  async updateLead(leadIdOrEmail, data) {
-    const response = await this.client.patch(`/leads/${encodeURIComponent(leadIdOrEmail)}`, data);
+  async updateLead(email, data, campaignId) {
+    if (campaignId) {
+      const response = await this.client.patch(
+        `/campaigns/${campaignId}/leads/${encodeURIComponent(email)}`,
+        data
+      );
+      return response.data;
+    }
+    const response = await this.client.patch(`/leads/${encodeURIComponent(email)}`, data);
     return response.data;
   }
 

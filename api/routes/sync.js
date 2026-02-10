@@ -365,10 +365,10 @@ router.post('/backfill-sfdc-source', async (req, res) => {
     const lemlist = new LemlistClient(config.lemlist);
     const hubspot = new HubSpotClient(config.hubspot);
 
-    // Get all processed leads with contact_id
+    // Get all processed leads with contact_id and campaign_id
     const { data: leads, error } = await supabase
       .from('processed_leads')
-      .select('contact_id, email');
+      .select('contact_id, email, campaign_id');
 
     if (error) throw error;
     if (!leads || leads.length === 0) {
@@ -407,8 +407,8 @@ router.post('/backfill-sfdc-source', async (req, res) => {
           }
         }
 
-        // Update the lead in Lemlist
-        await lemlist.updateLead(lead.email, { sfdcSource });
+        // Update the lead in Lemlist (campaign-specific for custom fields)
+        await lemlist.updateLead(lead.email, { sfdcSource }, lead.campaign_id);
         updated++;
         results.push({ email: lead.email, status: 'updated', sfdcSource });
       } catch (err) {
@@ -496,8 +496,8 @@ router.post('/backfill-company', async (req, res) => {
           companyName = name.charAt(0).toUpperCase() + name.slice(1);
         }
 
-        // Patch the lead in Lemlist
-        await lemlist.updateLead(lead.email, { companyName });
+        // Patch the lead in Lemlist (campaign-specific for custom fields)
+        await lemlist.updateLead(lead.email, { companyName }, lead.campaign_id);
         updated++;
         results.push({ email: lead.email, status: 'updated', companyName });
       } catch (err) {
