@@ -224,9 +224,17 @@ class WebhookService {
    * @returns {string|null} - Email or null
    */
   extractEmailFromPayload(payload) {
-    // Try common payload structures
+    // Priority 1: Non-owner attendee from attendees array (Lemcal format)
+    if (Array.isArray(payload.attendees)) {
+      const primary = payload.attendees.find(a => a.primary && a.email);
+      if (primary) return primary.email.toLowerCase().trim();
+      const nonOwner = payload.attendees.find(a => !a.owner && a.email);
+      if (nonOwner) return nonOwner.email.toLowerCase().trim();
+    }
+
+    // Priority 2: Direct fields
     const possiblePaths = [
-      payload.email,
+      payload.lead?.email,
       payload.invitee?.email,
       payload.attendee?.email,
       payload.guest?.email,
@@ -234,7 +242,8 @@ class WebhookService {
       payload.data?.email,
       payload.data?.invitee?.email,
       payload.booking?.email,
-      payload.booking?.invitee?.email
+      payload.booking?.invitee?.email,
+      payload.email,
     ];
 
     for (const email of possiblePaths) {

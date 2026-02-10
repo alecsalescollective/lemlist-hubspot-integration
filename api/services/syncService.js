@@ -401,12 +401,14 @@ class SyncService {
 
         const meetingId = meeting._id || meeting.id || `lemcal_${Date.now()}_${synced}`;
 
-        // Extract contact name
+        // Extract contact name from the non-owner attendee
         let contactName = null;
-        if (meeting.lead) {
+        if (Array.isArray(meeting.attendees)) {
+          const leadAttendee = meeting.attendees.find(a => a.primary || !a.owner);
+          if (leadAttendee?.name) contactName = leadAttendee.name;
+        }
+        if (!contactName && meeting.lead) {
           contactName = [meeting.lead.firstName, meeting.lead.lastName].filter(Boolean).join(' ') || null;
-        } else if (meeting.firstName) {
-          contactName = [meeting.firstName, meeting.lastName].filter(Boolean).join(' ') || null;
         }
 
         const meetingData = {
@@ -465,26 +467,29 @@ class SyncService {
   }
 
   /**
-   * Extract contact/lead email from a Lemcal meeting object
+   * Extract the lead/attendee email from a Lemcal meeting object
+   * Skips the owner attendee — we want the person who booked, not the host
    */
   extractMeetingEmail(meeting) {
+    // Priority 1: Non-owner attendee from attendees array (primary = the person who booked)
+    if (Array.isArray(meeting.attendees)) {
+      // First try: attendee with primary: true (the lead who booked)
+      const primary = meeting.attendees.find(a => a.primary && a.email);
+      if (primary) return primary.email.toLowerCase().trim();
+      // Second try: any attendee that isn't the owner
+      const nonOwner = meeting.attendees.find(a => !a.owner && a.email);
+      if (nonOwner) return nonOwner.email.toLowerCase().trim();
+    }
+
+    // Priority 2: Direct fields
     const candidates = [
-      meeting.email,
       meeting.lead?.email,
       meeting.invitee?.email,
       meeting.attendee?.email,
       meeting.guest?.email,
       meeting.contact?.email,
+      meeting.email,
     ];
-
-    // Also check attendees array
-    if (Array.isArray(meeting.attendees)) {
-      for (const att of meeting.attendees) {
-        if (att.email && typeof att.email === 'string') {
-          candidates.push(att.email);
-        }
-      }
-    }
 
     for (const email of candidates) {
       if (email && typeof email === 'string' && email.includes('@')) {
