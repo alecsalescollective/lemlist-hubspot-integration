@@ -16,8 +16,10 @@ const config = {
     apiKey: process.env.LEMLIST_API_KEY,
     apiUrl: 'https://api.lemlist.com/api'
   },
-  // Lemcal meetings come via webhooks - no API credentials needed
-  lemcal: {},
+  lemcal: {
+    apiKey: process.env.LEMCAL_API_KEY || process.env.Lemcal_Api_Key,
+    apiUrl: 'https://api.lemcal.com/api/lemcal'
+  },
   salesforce: {
     loginUrl: 'https://login.salesforce.com'
   },

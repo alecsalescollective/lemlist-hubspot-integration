@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { createLogger } = require('../utils/logger');
 const LemlistClient = require('../clients/lemlist');
+const LemcalClient = require('../clients/lemcal');
 const SalesforceClient = require('../clients/salesforce');
 const { config } = require('../config');
 const routingConfig = require('../config/routing.json');
@@ -31,8 +32,8 @@ function getClients() {
  * Data sources:
  * - Leads: HubSpot → Lemlist (via leadPipelineService)
  * - Campaigns: Lemlist API
- * - Meetings: Lemcal webhooks (not synced here - real-time via webhook)
- * - Activities: Lemlist webhooks (not synced here - real-time via webhook)
+ * - Meetings: Lemcal API polling + webhooks
+ * - Activities: Lemlist API polling + webhooks
  */
 class SyncService {
   /**
@@ -55,12 +56,13 @@ class SyncService {
         results.activities = await this.syncActivities();
       }
 
-      // Note: Meetings come from Lemcal webhooks, not API sync
-      if (type === 'meetings') {
-        results.meetings = {
-          synced: 0,
-          message: 'Meetings are captured via Lemcal webhooks in real-time'
-        };
+      if (type === 'all' || type === 'meetings') {
+        try {
+          results.meetings = await this.syncMeetings();
+        } catch (error) {
+          logger.warn({ error: error.message }, 'Meetings sync skipped (Lemcal API may not be configured)');
+          results.meetings = { synced: 0, message: error.message };
+        }
       }
 
       // Sync Salesforce pipeline data
@@ -329,6 +331,139 @@ class SyncService {
       logger.error({ error: error.message }, 'Activities sync failed');
       throw error;
     }
+  }
+
+  /**
+   * Sync meetings from Lemcal API
+   * Polls the Lemcal meetings endpoint and upserts into meetings table
+   */
+  async syncMeetings() {
+    logger.info('Starting meetings sync from Lemcal API');
+    const { supabase } = getClients();
+
+    const lemcalApiKey = config.lemcal?.apiKey;
+    if (!lemcalApiKey) {
+      logger.warn('LEMCAL_API_KEY not configured, skipping meetings sync');
+      return { synced: 0, message: 'LEMCAL_API_KEY not configured' };
+    }
+
+    const lemcal = new LemcalClient(config.lemcal);
+
+    try {
+      await this.updateSyncStatus('meetings', 'in_progress');
+
+      const meetings = await lemcal.getMeetings();
+      logger.info({ count: meetings.length }, 'Fetched meetings from Lemcal');
+
+      let synced = 0;
+
+      for (const meeting of meetings) {
+        // Extract attendee/lead email from the meeting
+        const contactEmail = this.extractMeetingEmail(meeting);
+        if (!contactEmail) {
+          logger.debug({ meetingId: meeting._id || meeting.id }, 'Skipping meeting with no contact email');
+          continue;
+        }
+
+        // Look up owner from processed_leads
+        let owner = null;
+        try {
+          const { data: leadRecord } = await supabase
+            .from('processed_leads')
+            .select('owner')
+            .eq('email', contactEmail)
+            .limit(1)
+            .single();
+          if (leadRecord?.owner) owner = leadRecord.owner;
+        } catch {
+          // Lead not in our system — still store the meeting
+        }
+
+        const meetingId = meeting._id || meeting.id || `lemcal_${Date.now()}_${synced}`;
+
+        // Extract contact name
+        let contactName = null;
+        if (meeting.lead) {
+          contactName = [meeting.lead.firstName, meeting.lead.lastName].filter(Boolean).join(' ') || null;
+        } else if (meeting.firstName) {
+          contactName = [meeting.firstName, meeting.lastName].filter(Boolean).join(' ') || null;
+        }
+
+        const meetingData = {
+          lemcal_meeting_id: meetingId,
+          title: meeting.meetingTypeName || meeting.title || 'Meeting',
+          owner,
+          scheduled_at: meeting.start || meeting.startTime || meeting.createdAt || new Date().toISOString(),
+          end_at: meeting.end || meeting.endTime || null,
+          outcome: 'scheduled',
+          contact_email: contactEmail,
+          contact_name: contactName,
+          notes: meeting.providedInfos || meeting.notes || null,
+          synced_at: new Date().toISOString()
+        };
+
+        const { error } = await supabase
+          .from('meetings')
+          .upsert(meetingData, { onConflict: 'lemcal_meeting_id' });
+
+        if (error) {
+          logger.error({ error: error.message, meetingId }, 'Failed to upsert meeting');
+        } else {
+          synced++;
+
+          // Also update lead status to meeting_booked if they exist in processed_leads
+          try {
+            await supabase
+              .from('processed_leads')
+              .update({ status: 'meeting_booked' })
+              .eq('email', contactEmail)
+              .neq('status', 'meeting_booked');
+          } catch {
+            // Non-critical
+          }
+        }
+      }
+
+      await this.updateSyncStatus('meetings', 'success', synced);
+      logger.info({ synced, total: meetings.length }, 'Meetings sync completed');
+      return { synced, total: meetings.length };
+
+    } catch (error) {
+      await this.updateSyncStatus('meetings', 'failed', 0, error.message);
+      logger.error({ error: error.message }, 'Meetings sync failed');
+      throw error;
+    }
+  }
+
+  /**
+   * Extract contact/lead email from a Lemcal meeting object
+   */
+  extractMeetingEmail(meeting) {
+    const candidates = [
+      meeting.email,
+      meeting.lead?.email,
+      meeting.invitee?.email,
+      meeting.attendee?.email,
+      meeting.guest?.email,
+      meeting.contact?.email,
+    ];
+
+    // Also check attendees array
+    if (Array.isArray(meeting.attendees)) {
+      for (const att of meeting.attendees) {
+        if (att.email && typeof att.email === 'string') {
+          candidates.push(att.email);
+        }
+      }
+    }
+
+    for (const email of candidates) {
+      if (email && typeof email === 'string' && email.includes('@')) {
+        return email.toLowerCase().trim();
+      }
+    }
+
+    return null;
   }
 
   /**
