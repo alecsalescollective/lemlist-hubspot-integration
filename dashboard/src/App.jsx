@@ -9,7 +9,6 @@ import FunnelChart from './components/dashboard/FunnelChart';
 import GTMKPIBar from './components/dashboard/GTMKPIBar';
 import LeadOverview from './components/dashboard/LeadOverview';
 import CampaignTable from './components/dashboard/CampaignTable';
-import LeadActivityFeed from './components/dashboard/LeadActivityFeed';
 import MeetingsBooked from './components/dashboard/MeetingsBooked';
 import PipelineSection from './components/dashboard/PipelineSection';
 import { layout } from './styles/designTokens';
@@ -38,16 +37,13 @@ function Dashboard() {
       {/* GTM KPI Cards */}
       <GTMKPIBar />
 
-      {/* Main Grid - Campaign Performance + Lead Overview */}
-      <div className={`${layout.grid2} ${layout.sectionGap} ${layout.sectionMargin}`}>
-        <CampaignTable />
+      {/* Main Grid - Campaign + Meetings left, Lead Overview right (double height) */}
+      <div className={`grid grid-cols-1 lg:grid-cols-2 ${layout.sectionGap} ${layout.sectionMargin}`}>
+        <div className="flex flex-col gap-6 sm:gap-8">
+          <CampaignTable />
+          <MeetingsBooked />
+        </div>
         <LeadOverview />
-      </div>
-
-      {/* Bottom Grid - Activity Feed + Meetings */}
-      <div className={`${layout.grid2} ${layout.sectionGap}`}>
-        <LeadActivityFeed />
-        <MeetingsBooked />
       </div>
 
       {/* Pipeline Section - Salesforce data */}

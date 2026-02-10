@@ -92,14 +92,14 @@ export default function LeadOverview() {
   };
 
   return (
-    <div className={`${card.base} p-4 sm:p-6 lg:p-8`}>
+    <div className={`${card.base} p-4 sm:p-6 lg:p-8 h-full`}>
       <h2 className={`${typography.cardTitle} mb-4 sm:mb-6 lg:mb-8`}>Lead Overview</h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="space-y-6">
         {/* By Owner */}
         <div>
-          <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Owner</h3>
-          <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by owner chart">
+          <h3 className={`${typography.tableHeader} mb-3`}>By Owner</h3>
+          <div className="h-28 sm:h-32" role="img" aria-label="Leads by owner chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={ownerData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
@@ -125,15 +125,15 @@ export default function LeadOverview() {
 
         {/* By Status */}
         <div>
-          <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Status</h3>
-          <div className="h-32 sm:h-40 lg:h-48" role="img" aria-label="Leads by status chart">
+          <h3 className={`${typography.tableHeader} mb-3`}>By Status</h3>
+          <div className="h-28 sm:h-32" role="img" aria-label="Leads by status chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={70}
+                  width={90}
                   tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
@@ -151,16 +151,16 @@ export default function LeadOverview() {
         </div>
 
         {/* By Source */}
-        <div className="sm:col-span-2 lg:col-span-1">
-          <h3 className={`${typography.tableHeader} mb-3 sm:mb-4`}>By Source</h3>
-          <div className={sourceData.length > 3 ? 'h-48 sm:h-56 lg:h-64' : 'h-32 sm:h-40 lg:h-48'} role="img" aria-label="Leads by source chart">
+        <div>
+          <h3 className={`${typography.tableHeader} mb-3`}>By Source</h3>
+          <div className={sourceData.length > 3 ? 'h-48 sm:h-56' : 'h-32 sm:h-40'} role="img" aria-label="Leads by source chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sourceData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={120}
+                  width={140}
                   tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
