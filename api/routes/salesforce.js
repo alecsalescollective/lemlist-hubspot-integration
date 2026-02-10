@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto');
 const axios = require('axios');
 const SalesforceClient = require('../clients/salesforce');
 const { createLogger } = require('../utils/logger');
@@ -13,20 +12,8 @@ const REDIRECT_URI = process.env.SALESFORCE_REDIRECT_URI || 'https://lemlist-hub
 const LOGIN_URL = 'https://login.salesforce.com';
 
 /**
- * Generate PKCE code verifier and challenge
- */
-function generatePKCE() {
-  const verifier = crypto.randomBytes(32).toString('base64url');
-  const challenge = crypto
-    .createHash('sha256')
-    .update(verifier)
-    .digest('base64url');
-  return { verifier, challenge };
-}
-
-/**
  * GET /api/salesforce/auth
- * Redirect to Salesforce OAuth authorization page with PKCE
+ * Redirect to Salesforce OAuth authorization page
  */
 router.get('/auth', (req, res) => {
   if (!SALESFORCE_CLIENT_ID) {
@@ -36,30 +23,21 @@ router.get('/auth', (req, res) => {
     });
   }
 
-  const { verifier, challenge } = generatePKCE();
-
-  // Encode verifier in state param so it survives the serverless redirect
-  // This is safe because the verifier alone cannot be used without the challenge
-  const state = Buffer.from(JSON.stringify({ v: verifier })).toString('base64url');
-
   const authUrl = new URL(`${LOGIN_URL}/services/oauth2/authorize`);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('client_id', SALESFORCE_CLIENT_ID);
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
   authUrl.searchParams.set('scope', 'api refresh_token');
-  authUrl.searchParams.set('code_challenge', challenge);
-  authUrl.searchParams.set('code_challenge_method', 'S256');
-  authUrl.searchParams.set('state', state);
 
   res.redirect(authUrl.toString());
 });
 
 /**
  * GET /api/salesforce/callback
- * OAuth callback - exchange code for tokens with PKCE verifier
+ * OAuth callback - exchange code for tokens
  */
 router.get('/callback', async (req, res) => {
-  const { code, state, error, error_description } = req.query;
+  const { code, error, error_description } = req.query;
 
   if (error) {
     return res.status(400).json({
@@ -72,34 +50,16 @@ router.get('/callback', async (req, res) => {
     return res.status(400).json({ error: 'No authorization code provided' });
   }
 
-  // Extract PKCE verifier from state
-  let codeVerifier;
   try {
-    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
-    codeVerifier = stateData.v;
-  } catch {
-    return res.status(400).json({
-      error: 'Invalid state parameter',
-      message: 'Please restart the OAuth flow at /api/salesforce/auth'
-    });
-  }
-
-  try {
-    const tokenParams = {
-      grant_type: 'authorization_code',
-      client_id: SALESFORCE_CLIENT_ID,
-      redirect_uri: REDIRECT_URI,
-      code,
-      code_verifier: codeVerifier
-    };
-
-    if (SALESFORCE_CLIENT_SECRET) {
-      tokenParams.client_secret = SALESFORCE_CLIENT_SECRET;
-    }
-
     const response = await axios.post(
       `${LOGIN_URL}/services/oauth2/token`,
-      new URLSearchParams(tokenParams),
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: SALESFORCE_CLIENT_ID,
+        client_secret: SALESFORCE_CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+        code
+      }),
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       }
