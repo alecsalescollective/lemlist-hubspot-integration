@@ -136,7 +136,7 @@ class SyncService {
         // Aggregate across all channels (email + LinkedIn + WhatsApp + SMS)
         const emailsSent = (report.emailsSent || 0) + (report.linkedinSent || 0);
         const emailsOpened = (report.emailsOpened || 0) + (report.linkedinOpened || 0);
-        const emailsReplied = (report.emailsReplied || 0) + (report.linkedinReplied || 0) + (report.whatsappReplied || 0) + (report.smsReplied || 0);
+        const emailsReplied = (report.emailsReplied || 0) + (report.linkedinReplied || 0) + (report.whatsappReplied || 0) + (report.smsReplied || 0) + (report.meetingBooked || 0);
         const emailsBounced = report.emailsBounced || 0;
         const leadsCount = report.totalCount || report.leadsCount || report.leadCount || 0;
 
