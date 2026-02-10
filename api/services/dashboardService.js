@@ -503,16 +503,18 @@ class DashboardService {
     // Stage 2: In Sequence (leads with campaign_id)
     const inSequence = (leads || []).filter(l => l.campaign_id).length;
 
-    // Stage 3: Sequence Finished (status-based OR has a reply activity — replies end the sequence)
-    const statusFinished = new Set(
-      (leads || []).filter(l =>
-        l.status === 'sequence_finished' || l.status === 'meeting_booked'
-      ).map(l => l.email)
-    );
-
-    // Also check lead_activities for replies (a reply ends the sequence)
+    // Stage 3: Sequence Finished = any reply, meeting booked, or all steps sent
     const leadEmails = (leads || []).map(l => l.email).filter(Boolean);
-    let repliedEmails = new Set();
+    const finishedSet = new Set();
+
+    // 3a: Status-based (updated by sync)
+    (leads || []).forEach(l => {
+      if (l.status === 'sequence_finished' || l.status === 'meeting_booked') {
+        finishedSet.add(l.email);
+      }
+    });
+
+    // 3b: Leads with reply activities in lead_activities table
     if (leadEmails.length > 0) {
       try {
         const { data: repliedActivities } = await getSupabase()
@@ -521,14 +523,27 @@ class DashboardService {
           .in('activity_type', ['email_replied', 'linkedin_replied'])
           .in('lead_email', leadEmails.slice(0, 200));
 
-        (repliedActivities || []).forEach(a => repliedEmails.add(a.lead_email));
+        (repliedActivities || []).forEach(a => finishedSet.add(a.lead_email));
       } catch {
-        // Table might not exist
+        // Table might not exist yet
       }
     }
 
-    const allFinished = new Set([...statusFinished, ...repliedEmails]);
-    const sequenceFinished = allFinished.size;
+    // 3c: Leads whose email matches a meeting contact (meeting = sequence done)
+    if (leadEmails.length > 0) {
+      try {
+        const { data: meetingContacts } = await getSupabase()
+          .from('meetings')
+          .select('contact_email')
+          .in('contact_email', leadEmails.slice(0, 200));
+
+        (meetingContacts || []).forEach(m => finishedSet.add(m.contact_email));
+      } catch {
+        // Non-critical
+      }
+    }
+
+    const sequenceFinished = finishedSet.size;
 
     // Stage 4: Meetings Booked (from meetings table)
     let meetingsQuery = getSupabase()

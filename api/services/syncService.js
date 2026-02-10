@@ -248,11 +248,12 @@ class SyncService {
           const contactName = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || null;
           const campaignName = lead.campaignName || null;
 
-          // Check each activity type
+          // Check each activity type (CSV fields are strings, check for non-empty timestamps)
           const activityChecks = [
-            { flag: lead.isOpened || lead.emailsOpened > 0, type: 'email_opened' },
-            { flag: lead.isReplied || lead.emailsReplied > 0, type: 'email_replied' },
-            { flag: lead.isClicked || lead.emailsClicked > 0, type: 'email_clicked' },
+            { flag: lead.isOpened || lead.emailsOpened > 0 || lead.openedAt, type: 'email_opened' },
+            { flag: lead.isReplied || lead.emailsReplied > 0 || lead.repliedAt, type: 'email_replied' },
+            { flag: lead.linkedinRepliedAt, type: 'linkedin_replied' },
+            { flag: lead.isClicked || lead.emailsClicked > 0 || lead.clickedAt, type: 'email_clicked' },
           ];
 
           for (const { flag, type } of activityChecks) {
@@ -296,11 +297,21 @@ class SyncService {
           // Skip if already sequence_finished
           if (currentStatus === 'sequence_finished') continue;
 
-          // Lemlist export uses various flags for sequence completion
+          // A lead's sequence is "finished" if any of these are true:
+          // - They replied (email or LinkedIn) — reply ends the sequence
+          // - They booked a meeting — meeting ends the sequence
+          // - They were marked interested/notInterested
+          // - All sequence steps were sent (isFinished/isDone)
+          // CSV fields are strings: non-empty = truthy
           const isFinished = lead.isFinished || lead.isDone ||
             lead.leadStatus === 'notInterested' ||
             lead.leadStatus === 'interested' ||
-            lead.sequenceCompleted === true;
+            lead.sequenceCompleted === true ||
+            lead.repliedAt ||           // email reply
+            lead.linkedinRepliedAt ||   // LinkedIn reply
+            lead.meetingBooked ||       // meeting booked
+            lead.interestedAt ||        // marked interested
+            lead.notInterestedAt;       // marked not interested
 
           if (isFinished) {
             finishedEmails.push(email);

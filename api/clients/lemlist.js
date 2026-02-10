@@ -122,19 +122,78 @@ class LemlistClient {
 
   /**
    * Get all leads in a campaign with their activity statuses
+   * The /export endpoint returns CSV — parse it into JSON objects
    * @param {string} campaignId - Campaign ID
    * @returns {Promise<Array>} - Array of leads with statuses
    */
   async getCampaignLeadStatuses(campaignId) {
     try {
       const response = await this.client.get(`/campaigns/${campaignId}/export`);
-      return response.data || [];
+      const data = response.data;
+      if (!data) return [];
+      // If already an array (unlikely but handle it)
+      if (Array.isArray(data)) return data;
+      // Parse CSV string into JSON objects
+      if (typeof data === 'string') return this.parseCSV(data);
+      return [];
     } catch (error) {
       if (error.response?.status === 404) {
         return [];
       }
       throw error;
     }
+  }
+
+  /**
+   * Parse CSV string into array of objects
+   */
+  parseCSV(csvString) {
+    const lines = csvString.split('\n');
+    if (lines.length < 2) return [];
+    const headers = this.parseCSVLine(lines[0]);
+    const results = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const values = this.parseCSVLine(line);
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = values[idx] || ''; });
+      results.push(obj);
+    }
+    return results;
+  }
+
+  /**
+   * Parse a single CSV line handling quoted fields with commas/newlines
+   */
+  parseCSVLine(line) {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          current += '"';
+          i++; // skip escaped quote
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ',') {
+          fields.push(current);
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+    }
+    fields.push(current);
+    return fields;
   }
 
   /**
