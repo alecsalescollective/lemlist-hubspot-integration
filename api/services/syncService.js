@@ -388,20 +388,25 @@ class SyncService {
           stage = 'qualified';
         }
 
-        // Look up owner from processed_leads if we have an email
-        let owner = null;
-        if (contactEmail) {
-          const { data: leadRecord } = await supabase
-            .from('processed_leads')
-            .select('owner')
-            .eq('email', contactEmail)
-            .limit(1)
-            .single();
-
-          if (leadRecord?.owner) {
-            owner = leadRecord.owner;
-          }
+        // Only track opportunities tied to our inbound leads
+        if (!contactEmail) {
+          logger.debug({ oppId: opp.Id }, 'Skipping opportunity with no contact email');
+          continue;
         }
+
+        const { data: leadRecord } = await supabase
+          .from('processed_leads')
+          .select('owner')
+          .eq('email', contactEmail)
+          .limit(1)
+          .single();
+
+        if (!leadRecord) {
+          logger.debug({ oppId: opp.Id, email: contactEmail }, 'Skipping opportunity — contact not in processed_leads');
+          continue;
+        }
+
+        const owner = leadRecord.owner || null;
 
         const { error } = await supabase
           .from('pipeline_opportunities')
