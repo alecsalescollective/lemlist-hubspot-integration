@@ -399,11 +399,11 @@ router.post('/backfill-company', async (req, res) => {
     const results = [];
 
     for (const lead of leads) {
-      if (!lead.email || !lead.campaign_id) continue;
+      if (!lead.email) continue;
 
       try {
         // Check if lead exists in Lemlist and has companyName
-        const lemlistLead = await lemlist.checkLeadExists(lead.campaign_id, lead.email);
+        const lemlistLead = await lemlist.getLeadByEmail(lead.email);
         if (!lemlistLead) {
           results.push({ email: lead.email, status: 'not_in_lemlist' });
           continue;
