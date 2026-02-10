@@ -375,13 +375,27 @@ class SyncService {
       const meetings = await lemcal.getMeetings();
       logger.info({ count: meetings.length }, 'Fetched meetings from Lemcal');
 
+      // Excluded test meeting IDs — these are internal test bookings
+      const excludedMeetingIds = new Set([
+        'mee_MQHFGscLDzs3g78PD',
+        'mee_o7WBuFG9uwHExix2H'
+      ]);
+
       let synced = 0;
 
       for (const meeting of meetings) {
+        const meetingId = meeting._id || meeting.id;
+
+        // Skip excluded test meetings
+        if (excludedMeetingIds.has(meetingId)) {
+          logger.debug({ meetingId }, 'Skipping excluded test meeting');
+          continue;
+        }
+
         // Extract attendee/lead email from the meeting
         const contactEmail = this.extractMeetingEmail(meeting);
         if (!contactEmail) {
-          logger.debug({ meetingId: meeting._id || meeting.id }, 'Skipping meeting with no contact email');
+          logger.debug({ meetingId }, 'Skipping meeting with no contact email');
           continue;
         }
 
