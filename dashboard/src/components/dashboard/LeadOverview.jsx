@@ -60,11 +60,15 @@ export default function LeadOverview() {
     color: statusColors[status]?.bar || statusColors.draft?.bar || '#6B7280',
   }));
 
+  // Source colors for visual distinction
+  const sourceColors = ['#14B8A6', '#8B5CF6', '#F59E0B', '#EC4899', '#3B82F6', '#EF4444', '#10B981', '#6366F1'];
+
   // Use granular source detail when available, fall back to category
   const sourceData =
-    (data?.bySourceDetail || data?.bySource)?.map((s) => ({
+    (data?.bySourceDetail || data?.bySource)?.map((s, i) => ({
       name: s.source || 'Unknown',
       count: s.count,
+      color: sourceColors[i % sourceColors.length],
     })) || [];
 
   const hasData = ownerData.length > 0 || statusData.length > 0 || sourceData.length > 0;
@@ -95,83 +99,85 @@ export default function LeadOverview() {
     <div className={`${card.base} p-4 sm:p-6 lg:p-8 h-full`}>
       <h2 className={`${typography.cardTitle} mb-4 sm:mb-6 lg:mb-8`}>Lead Overview</h2>
 
-      <div className="space-y-6">
-        {/* By Owner */}
-        <div>
-          <h3 className={`${typography.tableHeader} mb-3`}>By Owner</h3>
-          <div className="h-28 sm:h-32" role="img" aria-label="Leads by owner chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ownerData} layout="vertical" margin={{ right: 35 }}>
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={50}
-                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip {...commonTooltipProps} />
-                <Bar dataKey="count" radius={chartConfig.barRadius}>
-                  {ownerData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+      <div className="flex flex-col h-full">
+        {/* Owner + Status side by side */}
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-6">
+          {/* By Owner */}
+          <div>
+            <h3 className={`${typography.tableHeader} mb-3`}>By Owner</h3>
+            <div className="h-28 sm:h-32" role="img" aria-label="Leads by owner chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ownerData} layout="vertical" margin={{ right: 30 }}>
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={50}
+                    tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip {...commonTooltipProps} />
+                  <Bar dataKey="count" radius={chartConfig.barRadius}>
+                    {ownerData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                    <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* By Status */}
+          <div>
+            <h3 className={`${typography.tableHeader} mb-3`}>By Status</h3>
+            <div className="h-28 sm:h-32" role="img" aria-label="Leads by status chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusData} layout="vertical" margin={{ right: 30 }}>
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={90}
+                    tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip {...commonTooltipProps} />
+                  <Bar dataKey="count" radius={chartConfig.barRadius}>
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                    <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
-        {/* By Status */}
-        <div>
-          <h3 className={`${typography.tableHeader} mb-3`}>By Status</h3>
-          <div className="h-28 sm:h-32" role="img" aria-label="Leads by status chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusData} layout="vertical" margin={{ right: 35 }}>
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={90}
-                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip {...commonTooltipProps} />
-                <Bar dataKey="count" radius={chartConfig.barRadius}>
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* By Source */}
-        <div>
+        {/* By Source - full width, expanded */}
+        <div className="flex-1">
           <h3 className={`${typography.tableHeader} mb-3`}>By Source</h3>
-          <div className={sourceData.length > 3 ? 'h-48 sm:h-56' : 'h-32 sm:h-40'} role="img" aria-label="Leads by source chart">
+          <div className={sourceData.length > 3 ? 'h-56 sm:h-64 lg:h-72' : 'h-40 sm:h-48 lg:h-56'} role="img" aria-label="Leads by source chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sourceData} layout="vertical" margin={{ right: 35 }}>
                 <XAxis type="number" hide />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={140}
-                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 11 }}
+                  width={160}
+                  tick={{ ...chartConfig.axis.tickStyle, fontSize: 12 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <Tooltip {...commonTooltipProps} />
-                <Bar
-                  dataKey="count"
-                  fill="#14B8A6"
-                  radius={chartConfig.barRadius}
-                >
-                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={12} fontWeight={600} />
+                <Bar dataKey="count" radius={chartConfig.barRadius}>
+                  {sourceData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                  <LabelList dataKey="count" position="right" className="fill-gray-300" fontSize={13} fontWeight={600} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

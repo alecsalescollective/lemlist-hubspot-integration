@@ -136,19 +136,19 @@ export default function FunnelChart() {
             {/* Stage Box */}
             <div className="text-center">
               <div
-                className={`rounded-lg px-4 lg:px-5 py-3 lg:py-4 min-w-[120px] lg:min-w-[140px] ${interactive.transition}`}
+                className={`rounded-lg px-5 lg:px-6 py-4 lg:py-5 min-w-[140px] lg:min-w-[160px] ${interactive.transition}`}
                 style={{
                   backgroundColor: `${stage.color}15`,
                   borderLeft: `4px solid ${stage.color}`,
                 }}
               >
                 <div
-                  className="text-xl lg:text-2xl font-bold flex items-center justify-center gap-1"
+                  className="text-2xl lg:text-3xl font-bold flex items-center justify-center gap-1"
                   style={{ color: stage.color }}
                 >
                   {stage.count.toLocaleString()}
                 </div>
-                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 font-medium">
                   {stage.name}
                 </div>
               </div>
@@ -156,13 +156,13 @@ export default function FunnelChart() {
 
             {/* Arrow with conversion rate */}
             {index < stages.length - 1 && (
-              <div className="flex flex-col items-center mx-1 lg:mx-2">
+              <div className="flex flex-col items-center mx-2 lg:mx-3">
                 <ArrowRight
                   className={`${iconSizes.md} text-gray-400 dark:text-gray-500`}
                   aria-hidden="true"
                 />
                 {conversionBetween(index) != null && (
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                     {conversionBetween(index)}%
                   </span>
                 )}

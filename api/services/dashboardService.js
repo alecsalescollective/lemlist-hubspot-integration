@@ -503,10 +503,32 @@ class DashboardService {
     // Stage 2: In Sequence (leads with campaign_id)
     const inSequence = (leads || []).filter(l => l.campaign_id).length;
 
-    // Stage 3: Sequence Finished (status is sequence_finished OR meeting_booked — they all completed the sequence)
-    const sequenceFinished = (leads || []).filter(l =>
-      l.status === 'sequence_finished' || l.status === 'meeting_booked'
-    ).length;
+    // Stage 3: Sequence Finished (status-based OR has a reply activity — replies end the sequence)
+    const statusFinished = new Set(
+      (leads || []).filter(l =>
+        l.status === 'sequence_finished' || l.status === 'meeting_booked'
+      ).map(l => l.email)
+    );
+
+    // Also check lead_activities for replies (a reply ends the sequence)
+    const leadEmails = (leads || []).map(l => l.email).filter(Boolean);
+    let repliedEmails = new Set();
+    if (leadEmails.length > 0) {
+      try {
+        const { data: repliedActivities } = await getSupabase()
+          .from('lead_activities')
+          .select('lead_email')
+          .in('activity_type', ['email_replied', 'linkedin_replied'])
+          .in('lead_email', leadEmails.slice(0, 200));
+
+        (repliedActivities || []).forEach(a => repliedEmails.add(a.lead_email));
+      } catch {
+        // Table might not exist
+      }
+    }
+
+    const allFinished = new Set([...statusFinished, ...repliedEmails]);
+    const sequenceFinished = allFinished.size;
 
     // Stage 4: Meetings Booked (from meetings table)
     let meetingsQuery = getSupabase()
