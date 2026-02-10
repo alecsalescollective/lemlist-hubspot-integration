@@ -342,9 +342,14 @@ class SyncService {
     const { supabase } = getClients();
 
     const lemcalApiKey = config.lemcal?.apiKey;
+    const lemcalUserId = config.lemcal?.userId;
     if (!lemcalApiKey) {
       logger.warn('LEMCAL_API_KEY not configured, skipping meetings sync');
       return { synced: 0, message: 'LEMCAL_API_KEY not configured' };
+    }
+    if (!lemcalUserId) {
+      logger.warn('LEMCAL_USER_ID not configured, skipping meetings sync');
+      return { synced: 0, message: 'LEMCAL_USER_ID not configured — add it in Vercel env vars' };
     }
 
     const lemcal = new LemcalClient(config.lemcal);
