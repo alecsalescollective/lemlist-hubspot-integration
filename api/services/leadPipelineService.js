@@ -131,6 +131,7 @@ class LeadPipelineService {
       'lead_source',
       'lifecyclestage',
       'hs_email_optout',
+      'source__sfdc_contact_record',
       triggerField,
       ...aiContextProps
     ];
@@ -254,6 +255,11 @@ class LeadPipelineService {
     if (!leadPayload.companyName) {
       leadPayload.companyName = this.deriveCompanyFromEmail(email);
       logger.warn({ contactId, email, companyName: leadPayload.companyName }, 'Company missing after enrichment, using email domain fallback');
+    }
+
+    // Add Salesforce source field (maps to Source__c in SF via Lemlist field mapping)
+    if (props.source__sfdc_contact_record) {
+      leadPayload.sfdcSource = String(props.source__sfdc_contact_record);
     }
 
     // Add AI context fields - always send all fields, use empty string if no data
