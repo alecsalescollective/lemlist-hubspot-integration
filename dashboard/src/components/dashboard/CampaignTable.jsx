@@ -149,9 +149,6 @@ export default function CampaignTable() {
                   Campaign
                   <SortIcon field="name" />
                 </th>
-                <th scope="col" className={`${table.headerCell} hidden lg:table-cell`}>
-                  Owner
-                </th>
                 <th
                   scope="col"
                   className={`${getHeaderClasses('leadsCount', 'right')} hidden md:table-cell`}
@@ -221,10 +218,6 @@ export default function CampaignTable() {
                       <span className={`${typography.tableBody} truncate max-w-[150px] sm:max-w-[200px] lg:max-w-none`} title={campaign.name}>
                         {campaign.name}
                       </span>
-                    </td>
-                    {/* Owner - hidden on tablet and below */}
-                    <td className={`${table.bodyCellSecondary} capitalize hidden lg:table-cell`}>
-                      {campaign.owner || '-'}
                     </td>
                     {/* Leads - hidden on mobile */}
                     <td className={`${table.bodyCellRight} hidden md:table-cell`}>

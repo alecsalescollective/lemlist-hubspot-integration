@@ -245,6 +245,49 @@ router.get('/debug-search', async (req, res) => {
 });
 
 /**
+ * GET /api/sync/debug-lemlist-reports
+ * Debug: Show raw Lemlist campaign report data
+ */
+router.get('/debug-lemlist-reports', async (req, res) => {
+  try {
+    const LemlistClient = require('../clients/lemlist');
+    const { config } = require('../config');
+    const lemlist = new LemlistClient(config.lemlist);
+
+    const campaigns = await lemlist.getCampaigns();
+    const inboundCampaigns = campaigns.filter(c =>
+      c.name?.toLowerCase().includes('inbound')
+    );
+
+    const campaignIds = inboundCampaigns.map(c => c._id);
+    let reports = [];
+    try {
+      reports = await lemlist.getCampaignReports(campaignIds);
+    } catch (e) {
+      reports = [{ error: e.message }];
+    }
+
+    // Also try per-campaign stats
+    const statsResults = {};
+    for (const cid of campaignIds) {
+      try {
+        statsResults[cid] = await lemlist.getCampaignStats(cid);
+      } catch (e) {
+        statsResults[cid] = { error: e.message };
+      }
+    }
+
+    res.json({
+      campaigns: inboundCampaigns.map(c => ({ _id: c._id, name: c.name })),
+      reports,
+      perCampaignStats: statsResults
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/sync/trigger
  * Manually trigger a sync for all data types
  */
