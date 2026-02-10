@@ -352,6 +352,64 @@ router.post('/backfill-sources', async (req, res) => {
 });
 
 /**
+ * POST /api/sync/backfill-sfdc-source
+ * Backfill sfdcSource on all Lemlist leads from HubSpot source__sfdc_contact_record
+ */
+router.post('/backfill-sfdc-source', async (req, res) => {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const LemlistClient = require('../clients/lemlist');
+    const HubSpotClient = require('../clients/hubspot');
+    const { config } = require('../config');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const lemlist = new LemlistClient(config.lemlist);
+    const hubspot = new HubSpotClient(config.hubspot);
+
+    // Get all processed leads with contact_id
+    const { data: leads, error } = await supabase
+      .from('processed_leads')
+      .select('contact_id, email');
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.json({ message: 'No processed leads found', updated: 0 });
+    }
+
+    let updated = 0;
+    const results = [];
+
+    for (const lead of leads) {
+      if (!lead.contact_id || !lead.email) continue;
+
+      try {
+        // Fetch source__sfdc_contact_record from HubSpot
+        const hsResponse = await hubspot.client.get(
+          `/crm/v3/objects/contacts/${lead.contact_id}`,
+          { params: { properties: 'source__sfdc_contact_record' } }
+        );
+
+        const sfdcSource = hsResponse.data?.properties?.source__sfdc_contact_record;
+        if (!sfdcSource) {
+          results.push({ email: lead.email, status: 'no_source_in_hubspot' });
+          continue;
+        }
+
+        // Update the lead in Lemlist
+        await lemlist.updateLead(lead.email, { sfdcSource });
+        updated++;
+        results.push({ email: lead.email, status: 'updated', sfdcSource });
+      } catch (err) {
+        results.push({ email: lead.email, status: 'error', error: err.response?.status || err.message });
+      }
+    }
+
+    res.json({ message: `Updated ${updated} of ${leads.length} leads`, updated, total: leads.length, results });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/sync/debug-lemcal
  * Debug: Show raw Lemcal meeting data
  */
