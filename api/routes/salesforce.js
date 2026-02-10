@@ -27,7 +27,7 @@ router.get('/auth', (req, res) => {
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('client_id', SALESFORCE_CLIENT_ID);
   authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
-  authUrl.searchParams.set('scope', 'api refresh_token');
+  authUrl.searchParams.set('scope', 'full refresh_token');
 
   res.redirect(authUrl.toString());
 });
