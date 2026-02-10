@@ -17,6 +17,7 @@ const config = {
     apiUrl: 'https://api.lemlist.com/api'
   },
   lemcal: {
+    userId: process.env.LEMCAL_USER_ID,
     apiKey: process.env.LEMCAL_API_KEY || process.env.Lemcal_Api_Key,
     apiUrl: 'https://api.lemcal.com/api/lemcal'
   },

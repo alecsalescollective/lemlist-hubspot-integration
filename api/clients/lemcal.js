@@ -2,7 +2,7 @@ const axios = require('axios');
 
 /**
  * Lightweight Lemcal client for polling booked meetings
- * Uses Basic auth (same pattern as Lemlist — empty username, apiKey as password)
+ * Uses Basic auth with userId:apiKey (both from app.lemcal.com/integrations)
  */
 class LemcalClient {
   constructor(config) {
@@ -12,7 +12,7 @@ class LemcalClient {
         'Content-Type': 'application/json'
       },
       auth: {
-        username: '',
+        username: config.userId || '',
         password: config.apiKey
       }
     });
