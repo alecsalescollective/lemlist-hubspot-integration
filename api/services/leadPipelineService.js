@@ -225,6 +225,15 @@ class LeadPipelineService {
       companyName: props.company || ''
     };
 
+    // If HubSpot contact is missing company, try to fetch from associated company
+    if (!leadPayload.companyName) {
+      const associatedCompany = await this.getAssociatedCompanyName(contactId);
+      if (associatedCompany) {
+        leadPayload.companyName = associatedCompany;
+        logger.info({ contactId, email, companyName: associatedCompany }, 'Got company from HubSpot association');
+      }
+    }
+
     // Enrich the lead before adding to campaign
     logger.info({ contactId, email }, 'Enriching lead data');
     try {
@@ -239,6 +248,12 @@ class LeadPipelineService {
     } catch (enrichError) {
       // Log but don't fail - continue with original data
       logger.warn({ contactId, email, error: enrichError.message }, 'Lead enrichment failed, continuing with original data');
+    }
+
+    // If companyName is still empty after enrichment, derive from email domain
+    if (!leadPayload.companyName) {
+      leadPayload.companyName = this.deriveCompanyFromEmail(email);
+      logger.warn({ contactId, email, companyName: leadPayload.companyName }, 'Company missing after enrichment, using email domain fallback');
     }
 
     // Add AI context fields - always send all fields, use empty string if no data
@@ -337,6 +352,56 @@ class LeadPipelineService {
       source_detail: sourceDetail || null,
       processed_at: new Date().toISOString()
     }, { onConflict: 'contact_id' });
+  }
+
+  /**
+   * Fetch the associated company name from HubSpot for a contact
+   */
+  async getAssociatedCompanyName(contactId) {
+    const { hubspot } = getClients();
+
+    try {
+      // Use HubSpot associations API to find associated company
+      const assocResponse = await hubspot.client.get(
+        `/crm/v3/objects/contacts/${contactId}/associations/companies`
+      );
+      const companyIds = (assocResponse.data?.results || []).map(r => r.id);
+      if (companyIds.length === 0) return null;
+
+      // Fetch the first associated company's name
+      const companyResponse = await hubspot.client.get(
+        `/crm/v3/objects/companies/${companyIds[0]}`,
+        { params: { properties: 'name' } }
+      );
+      return companyResponse.data?.properties?.name || null;
+    } catch (error) {
+      logger.debug({ contactId, error: error.message }, 'Could not fetch associated company');
+      return null;
+    }
+  }
+
+  /**
+   * Derive a company name from email domain as last resort
+   * Salesforce requires Company field — this ensures it's never empty
+   */
+  deriveCompanyFromEmail(email) {
+    const PERSONAL_DOMAINS = new Set([
+      'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+      'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
+      'protonmail.com', 'proton.me', 'mail.com', 'zoho.com', 'ymail.com'
+    ]);
+
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (!domain) return 'Unknown';
+
+    if (PERSONAL_DOMAINS.has(domain)) {
+      // For personal emails, use "Independent" — clearly signals no company
+      return 'Independent';
+    }
+
+    // For business domains, capitalize the domain name (strip TLD)
+    const name = domain.split('.')[0];
+    return name.charAt(0).toUpperCase() + name.slice(1);
   }
 
   /**

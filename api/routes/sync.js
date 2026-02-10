@@ -368,6 +368,79 @@ router.get('/debug-lemcal', async (req, res) => {
 });
 
 /**
+ * POST /api/sync/backfill-company
+ * Patch leads in Lemlist that are missing companyName (required for Salesforce sync)
+ */
+router.post('/backfill-company', async (req, res) => {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const LemlistClient = require('../clients/lemlist');
+    const { config } = require('../config');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const lemlist = new LemlistClient(config.lemlist);
+
+    // Get all processed leads
+    const { data: leads, error } = await supabase
+      .from('processed_leads')
+      .select('email, campaign_id, contact_id');
+
+    if (error) throw error;
+    if (!leads || leads.length === 0) {
+      return res.json({ message: 'No processed leads found', updated: 0 });
+    }
+
+    const PERSONAL_DOMAINS = new Set([
+      'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+      'icloud.com', 'me.com', 'mac.com', 'live.com', 'msn.com',
+      'protonmail.com', 'proton.me', 'mail.com', 'zoho.com', 'ymail.com'
+    ]);
+
+    let updated = 0;
+    const results = [];
+
+    for (const lead of leads) {
+      if (!lead.email || !lead.campaign_id) continue;
+
+      try {
+        // Check if lead exists in Lemlist and has companyName
+        const lemlistLead = await lemlist.checkLeadExists(lead.campaign_id, lead.email);
+        if (!lemlistLead) {
+          results.push({ email: lead.email, status: 'not_in_lemlist' });
+          continue;
+        }
+
+        const hasCompany = lemlistLead.companyName && lemlistLead.companyName.trim();
+        if (hasCompany) {
+          results.push({ email: lead.email, status: 'already_has_company', company: lemlistLead.companyName });
+          continue;
+        }
+
+        // Derive company from email domain
+        const domain = lead.email.split('@')[1]?.toLowerCase();
+        let companyName;
+        if (!domain || PERSONAL_DOMAINS.has(domain)) {
+          companyName = 'Independent';
+        } else {
+          const name = domain.split('.')[0];
+          companyName = name.charAt(0).toUpperCase() + name.slice(1);
+        }
+
+        // Patch the lead in Lemlist
+        await lemlist.updateLead(lead.email, { companyName });
+        updated++;
+        results.push({ email: lead.email, status: 'updated', companyName });
+      } catch (err) {
+        results.push({ email: lead.email, status: 'error', error: err.message });
+      }
+    }
+
+    res.json({ message: `Updated ${updated} of ${leads.length} leads`, updated, total: leads.length, results });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/sync/trigger
  * Manually trigger a sync for all data types
  */
