@@ -146,16 +146,16 @@ class LemlistClient {
 
   /**
    * Parse CSV string into array of objects
+   * Handles multiline quoted fields (email bodies, descriptions)
    */
   parseCSV(csvString) {
-    const lines = csvString.split('\n');
-    if (lines.length < 2) return [];
-    const headers = this.parseCSVLine(lines[0]);
+    const records = this.splitCSVRecords(csvString);
+    if (records.length < 2) return [];
+    const headers = records[0];
     const results = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const values = this.parseCSVLine(line);
+    for (let i = 1; i < records.length; i++) {
+      const values = records[i];
+      if (values.length < 2) continue; // skip empty/malformed rows
       const obj = {};
       headers.forEach((h, idx) => { obj[h] = values[idx] || ''; });
       results.push(obj);
@@ -164,18 +164,22 @@ class LemlistClient {
   }
 
   /**
-   * Parse a single CSV line handling quoted fields with commas/newlines
+   * Split CSV into records, properly handling multiline quoted fields
+   * Returns array of arrays (each record is array of field values)
    */
-  parseCSVLine(line) {
-    const fields = [];
+  splitCSVRecords(csvString) {
+    const records = [];
+    let fields = [];
     let current = '';
     let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+
+    for (let i = 0; i < csvString.length; i++) {
+      const ch = csvString[i];
+
       if (inQuotes) {
-        if (ch === '"' && line[i + 1] === '"') {
+        if (ch === '"' && csvString[i + 1] === '"') {
           current += '"';
-          i++; // skip escaped quote
+          i++;
         } else if (ch === '"') {
           inQuotes = false;
         } else {
@@ -187,13 +191,24 @@ class LemlistClient {
         } else if (ch === ',') {
           fields.push(current);
           current = '';
+        } else if (ch === '\n' || (ch === '\r' && csvString[i + 1] === '\n')) {
+          if (ch === '\r') i++; // skip \r in \r\n
+          fields.push(current);
+          current = '';
+          records.push(fields);
+          fields = [];
         } else {
           current += ch;
         }
       }
     }
-    fields.push(current);
-    return fields;
+    // Push last record
+    if (current || fields.length > 0) {
+      fields.push(current);
+      records.push(fields);
+    }
+
+    return records;
   }
 
   /**
