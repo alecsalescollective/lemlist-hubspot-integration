@@ -31,6 +31,10 @@ function getClients() {
  * Searches HubSpot for contacts with trigger field set, adds them to Lemlist campaigns
  */
 class LeadPipelineService {
+  constructor() {
+    this.sourceContextCache = new Map();
+  }
+
   /**
    * Run the lead pipeline - triggered by Vercel Cron
    * @returns {Promise<Object>} Pipeline run results
@@ -122,19 +126,20 @@ class LeadPipelineService {
       ? Object.values(routingConfig.ai_context_fields)
       : [];
 
-    const properties = [
+    const properties = Array.from(new Set([
       'email',
       'firstname',
       'lastname',
       'company',
       'hubspot_owner_id',
       'lead_source',
+      'hs_object_source_detail_1',
       'lifecyclestage',
       'hs_email_optout',
       'source__sfdc_contact_record',
       triggerField,
       ...aiContextProps
-    ];
+    ]));
 
     try {
       // Search for both "true" and "Yes" values (HubSpot checkbox can return either)
@@ -169,6 +174,9 @@ class LeadPipelineService {
     const contactId = contact.id;
     const props = contact.properties || {};
     const email = props.email;
+    const sourceDetail = props.hs_object_source_detail_1
+      ? String(props.hs_object_source_detail_1).trim()
+      : '';
 
     if (!email) {
       logger.warn({ contactId }, 'Contact missing email, skipping');
@@ -181,21 +189,48 @@ class LeadPipelineService {
       return { skipped: true };
     }
 
-    // Get owner and campaign
-    const ownerId = props.hubspot_owner_id;
-    const ownerName = routingConfig.owners[ownerId];
+    // Resolve owner and campaign.
+    // Priority: contact owner -> associated account owner.
+    const contactOwnerId = props.hubspot_owner_id
+      ? String(props.hubspot_owner_id).trim()
+      : null;
+    let ownerName = contactOwnerId ? routingConfig.owners[contactOwnerId] : null;
+    let ownerResolution = contactOwnerId ? 'contact_owner' : 'none';
+    let associatedCompany = null;
 
     if (!ownerName) {
-      logger.warn({ contactId, ownerId }, 'Unknown owner ID, skipping');
+      associatedCompany = await this.getAssociatedCompanyData(contactId);
+      const accountOwnerId = associatedCompany?.ownerId
+        ? String(associatedCompany.ownerId).trim()
+        : null;
+      if (accountOwnerId && routingConfig.owners[accountOwnerId]) {
+        ownerName = routingConfig.owners[accountOwnerId];
+        ownerResolution = 'account_owner';
+      } else {
+        logger.warn({
+          contactId,
+          email,
+          contactOwnerId,
+          accountOwnerId,
+          associatedCompanyId: associatedCompany?.id || null
+        }, 'Unable to resolve owner from contact or account owner, skipping');
+        return { skipped: true };
+      }
+    }
+
+    if (!ownerName) {
+      logger.warn({ contactId, email, contactOwnerId }, 'Unknown owner ID, skipping');
       return { skipped: true };
     }
 
-    const campaignId = routingConfig.campaigns[ownerName];
+    const campaignId = this.getCampaignIdForOwner(ownerName);
 
     if (!campaignId || campaignId === 'PLACEHOLDER') {
       logger.warn({ contactId, ownerName }, 'No campaign configured for owner, skipping');
       return { skipped: true };
     }
+
+    const sourceContextSummary = await this.getSourceContextSummary(sourceDetail);
 
     // Check if already processed in Supabase
     const { data: existing } = await supabase
@@ -214,7 +249,15 @@ class LeadPipelineService {
 
     if (existingLead) {
       logger.info({ contactId, email }, 'Lead already exists in Lemlist, marking as processed');
-      await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source, props.hs_object_source_detail_1);
+      await this.markProcessed(
+        contactId,
+        email,
+        ownerName,
+        campaignId,
+        props.lead_source,
+        sourceDetail,
+        sourceContextSummary
+      );
       return { duplicate: true };
     }
 
@@ -228,10 +271,12 @@ class LeadPipelineService {
 
     // If HubSpot contact is missing company, try to fetch from associated company
     if (!leadPayload.companyName) {
-      const associatedCompany = await this.getAssociatedCompanyName(contactId);
-      if (associatedCompany) {
-        leadPayload.companyName = associatedCompany;
-        logger.info({ contactId, email, companyName: associatedCompany }, 'Got company from HubSpot association');
+      if (!associatedCompany) {
+        associatedCompany = await this.getAssociatedCompanyData(contactId);
+      }
+      if (associatedCompany?.name) {
+        leadPayload.companyName = associatedCompany.name;
+        logger.info({ contactId, email, companyName: associatedCompany.name }, 'Got company from HubSpot association');
       }
     }
 
@@ -261,11 +306,20 @@ class LeadPipelineService {
     // Priority: source__sfdc_contact_record → normalized source_detail → "Other"
     leadPayload.sfdcSource = props.source__sfdc_contact_record
       ? String(props.source__sfdc_contact_record)
-      : this.normalizeSourceDetail(props.hs_object_source_detail_1);
+      : this.normalizeSourceDetail(sourceDetail);
 
     // Add AI context fields - always send all fields, use empty string if no data
     for (const [lemlistVar, hubspotProp] of Object.entries(routingConfig.ai_context_fields || {})) {
-      leadPayload[lemlistVar] = props[hubspotProp] ? String(props[hubspotProp]) : '';
+      if (hubspotProp === 'hs_object_source_detail_1') {
+        leadPayload[lemlistVar] = sourceContextSummary || sourceDetail || '';
+      } else {
+        leadPayload[lemlistVar] = props[hubspotProp] ? String(props[hubspotProp]) : '';
+      }
+    }
+
+    // Backward compatibility safety: keep leadSource populated even if routing config changes.
+    if (!Object.prototype.hasOwnProperty.call(leadPayload, 'leadSource') && (sourceContextSummary || sourceDetail)) {
+      leadPayload.leadSource = sourceContextSummary || sourceDetail;
     }
 
     // Add owner name for AI personalization
@@ -288,9 +342,17 @@ class LeadPipelineService {
     await lemlist.addLeadToCampaign(campaignId, leadPayload);
 
     // Mark as processed in Supabase (this prevents re-processing since we can't clear HubSpot trigger)
-    await this.markProcessed(contactId, email, ownerName, campaignId, props.lead_source, props.hs_object_source_detail_1);
+    await this.markProcessed(
+      contactId,
+      email,
+      ownerName,
+      campaignId,
+      props.lead_source,
+      sourceDetail,
+      sourceContextSummary
+    );
 
-    logger.info({ contactId, email, campaignId }, 'Lead added to Lemlist campaign');
+    logger.info({ contactId, email, campaignId, ownerResolution }, 'Lead added to Lemlist campaign');
 
     return { success: true };
   }
@@ -347,24 +409,121 @@ class LeadPipelineService {
   /**
    * Mark contact as processed in Supabase
    */
-  async markProcessed(contactId, email, owner, campaignId, leadSource, sourceDetail) {
+  async markProcessed(contactId, email, owner, campaignId, leadSource, sourceDetail, sourceContextSummary = null) {
     const { supabase } = getClients();
 
-    await supabase.from('processed_leads').upsert({
+    const payload = {
       contact_id: contactId,
       email,
       owner,
       campaign_id: campaignId,
       lead_source: leadSource || 'trigger',
       source_detail: sourceDetail || null,
+      source_context_summary: sourceContextSummary || null,
       processed_at: new Date().toISOString()
-    }, { onConflict: 'contact_id' });
+    };
+
+    const { error } = await supabase
+      .from('processed_leads')
+      .upsert(payload, { onConflict: 'contact_id' });
+
+    if (!error) {
+      return;
+    }
+
+    // Backward-compatible fallback for environments where the new migration
+    // has not been applied yet.
+    if (error.message && error.message.includes('source_context_summary')) {
+      logger.warn({ error: error.message }, 'processed_leads.source_context_summary column missing; retrying without context snapshot');
+      const legacyPayload = { ...payload };
+      delete legacyPayload.source_context_summary;
+
+      const { error: legacyError } = await supabase
+        .from('processed_leads')
+        .upsert(legacyPayload, { onConflict: 'contact_id' });
+
+      if (legacyError) {
+        throw legacyError;
+      }
+      return;
+    }
+
+    throw error;
   }
 
   /**
-   * Fetch the associated company name from HubSpot for a contact
+   * Resolve campaign ID for owner.
+   * Supports per-owner env overrides without changing routing.json.
    */
-  async getAssociatedCompanyName(contactId) {
+  getCampaignIdForOwner(ownerName) {
+    const envKey = `LEMLIST_CAMPAIGN_${String(ownerName).toUpperCase()}`;
+    const envCampaignId = process.env[envKey];
+    if (envCampaignId && envCampaignId.trim()) {
+      return envCampaignId.trim();
+    }
+    return routingConfig.campaigns[ownerName];
+  }
+
+  /**
+   * Get rich context summary for a HubSpot source detail value.
+   * If mapping does not exist yet, create scaffold 1:1 mapping and use raw value.
+   */
+  async getSourceContextSummary(sourceDetail) {
+    const sourceValue = sourceDetail ? String(sourceDetail).trim() : '';
+    if (!sourceValue) return '';
+
+    const cached = this.sourceContextCache.get(sourceValue);
+    if (cached) return cached;
+
+    const { supabase } = getClients();
+    try {
+      const { data, error } = await supabase
+        .from('lead_source_contexts')
+        .select('context_summary, is_active')
+        .eq('source_value', sourceValue)
+        .limit(1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const row = data[0];
+        if (row.is_active === false) {
+          this.sourceContextCache.set(sourceValue, sourceValue);
+          return sourceValue;
+        }
+
+        const summary = row.context_summary
+          ? String(row.context_summary).trim()
+          : sourceValue;
+        this.sourceContextCache.set(sourceValue, summary);
+        return summary;
+      }
+
+      const summary = sourceValue;
+      const { error: upsertError } = await supabase
+        .from('lead_source_contexts')
+        .upsert({
+          source_value: sourceValue,
+          context_summary: summary,
+          is_active: true
+        }, { onConflict: 'source_value' });
+
+      if (upsertError) {
+        logger.warn({ sourceValue, error: upsertError.message }, 'Failed to scaffold source context mapping');
+      }
+
+      this.sourceContextCache.set(sourceValue, summary);
+      return summary;
+    } catch (error) {
+      logger.warn({ sourceValue, error: error.message }, 'Failed to resolve source context summary; falling back to raw source');
+      return sourceValue;
+    }
+  }
+
+  /**
+   * Fetch associated company data from HubSpot for a contact.
+   */
+  async getAssociatedCompanyData(contactId) {
     const { hubspot } = getClients();
 
     try {
@@ -373,14 +532,22 @@ class LeadPipelineService {
         `/crm/v3/objects/contacts/${contactId}/associations/companies`
       );
       const companyIds = (assocResponse.data?.results || []).map(r => r.id);
-      if (companyIds.length === 0) return null;
+      if (companyIds.length === 0) {
+        return null;
+      }
 
-      // Fetch the first associated company's name
+      // Fetch the first associated company's name + owner
       const companyResponse = await hubspot.client.get(
         `/crm/v3/objects/companies/${companyIds[0]}`,
-        { params: { properties: 'name' } }
+        { params: { properties: 'name,hubspot_owner_id' } }
       );
-      return companyResponse.data?.properties?.name || null;
+      const properties = companyResponse.data?.properties || {};
+
+      return {
+        id: companyIds[0],
+        name: properties.name || null,
+        ownerId: properties.hubspot_owner_id ? String(properties.hubspot_owner_id).trim() : null
+      };
     } catch (error) {
       logger.debug({ contactId, error: error.message }, 'Could not fetch associated company');
       return null;
