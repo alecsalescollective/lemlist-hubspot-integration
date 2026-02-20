@@ -13,6 +13,7 @@
 require('dotenv').config({ path: './.env' });
 require('dotenv').config({ path: './.env.local', override: true });
 const { createClient } = require('@supabase/supabase-js');
+const curatedSourceContexts = require('../api/config/source-contexts.json');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -59,14 +60,18 @@ function chunkArray(arr, size) {
 }
 
 async function upsertContextMappings(sourceValues) {
-  const uniqueValues = Array.from(new Set(sourceValues));
+  const curatedValues = Object.keys(curatedSourceContexts || {});
+  const uniqueValues = Array.from(new Set([
+    ...sourceValues,
+    ...curatedValues
+  ]));
   const chunks = chunkArray(uniqueValues, UPSERT_CHUNK_SIZE);
   let upserted = 0;
 
   for (const chunk of chunks) {
     const rows = chunk.map(sourceValue => ({
       source_value: sourceValue,
-      context_summary: sourceValue,
+      context_summary: curatedSourceContexts[sourceValue.toLowerCase()] || sourceValue,
       is_active: true
     }));
 

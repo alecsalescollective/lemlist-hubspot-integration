@@ -4,6 +4,7 @@ const HubSpotClient = require('../clients/hubspot');
 const LemlistClient = require('../clients/lemlist');
 const { config } = require('../config');
 const routingConfig = require('../config/routing.json');
+const curatedSourceContexts = require('../config/source-contexts.json');
 
 const logger = createLogger('lead-pipeline');
 
@@ -33,6 +34,8 @@ function getClients() {
 class LeadPipelineService {
   constructor() {
     this.sourceContextCache = new Map();
+    this.sourceContextTableAvailable = true;
+    this.loggedSourceContextTableUnavailable = false;
   }
 
   /**
@@ -471,34 +474,63 @@ class LeadPipelineService {
   async getSourceContextSummary(sourceDetail) {
     const sourceValue = sourceDetail ? String(sourceDetail).trim() : '';
     if (!sourceValue) return '';
+    const sourceKey = sourceValue.toLowerCase();
 
-    const cached = this.sourceContextCache.get(sourceValue);
+    const cached = this.sourceContextCache.get(sourceKey);
     if (cached) return cached;
+
+    if (this.sourceContextTableAvailable) {
+      const { supabase } = getClients();
+      try {
+        const { data, error } = await supabase
+          .from('lead_source_contexts')
+          .select('source_value, context_summary, is_active')
+          .eq('source_value', sourceValue)
+          .limit(1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          const row = data[0];
+          if (row.is_active === false) {
+            this.sourceContextCache.set(sourceKey, sourceValue);
+            return sourceValue;
+          }
+
+          const summary = row.context_summary
+            ? String(row.context_summary).trim()
+            : sourceValue;
+          this.sourceContextCache.set(sourceKey, summary);
+          return summary;
+        }
+      } catch (error) {
+        const missingTable = error.message && error.message.includes('lead_source_contexts');
+        if (missingTable) {
+          this.sourceContextTableAvailable = false;
+          if (!this.loggedSourceContextTableUnavailable) {
+            logger.warn('lead_source_contexts table not found; using curated in-code source context mappings');
+            this.loggedSourceContextTableUnavailable = true;
+          }
+        } else {
+          logger.warn({ sourceValue, error: error.message }, 'Failed to resolve source context summary from table');
+        }
+      }
+    }
+
+    const curatedSummary = curatedSourceContexts[sourceKey];
+    if (curatedSummary) {
+      this.sourceContextCache.set(sourceKey, curatedSummary);
+      return curatedSummary;
+    }
+
+    // No table mapping and no curated entry: keep legacy behavior.
+    if (!this.sourceContextTableAvailable) {
+      this.sourceContextCache.set(sourceKey, sourceValue);
+      return sourceValue;
+    }
 
     const { supabase } = getClients();
     try {
-      const { data, error } = await supabase
-        .from('lead_source_contexts')
-        .select('context_summary, is_active')
-        .eq('source_value', sourceValue)
-        .limit(1);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const row = data[0];
-        if (row.is_active === false) {
-          this.sourceContextCache.set(sourceValue, sourceValue);
-          return sourceValue;
-        }
-
-        const summary = row.context_summary
-          ? String(row.context_summary).trim()
-          : sourceValue;
-        this.sourceContextCache.set(sourceValue, summary);
-        return summary;
-      }
-
       const summary = sourceValue;
       const { error: upsertError } = await supabase
         .from('lead_source_contexts')
@@ -512,10 +544,11 @@ class LeadPipelineService {
         logger.warn({ sourceValue, error: upsertError.message }, 'Failed to scaffold source context mapping');
       }
 
-      this.sourceContextCache.set(sourceValue, summary);
+      this.sourceContextCache.set(sourceKey, summary);
       return summary;
     } catch (error) {
       logger.warn({ sourceValue, error: error.message }, 'Failed to resolve source context summary; falling back to raw source');
+      this.sourceContextCache.set(sourceKey, sourceValue);
       return sourceValue;
     }
   }
