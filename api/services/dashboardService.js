@@ -82,19 +82,9 @@ class DashboardService {
       sourceDetails[detailKey] = (sourceDetails[detailKey] || 0) + 1;
     }
 
-    // Status: all processed leads are "in sequence" (they go straight to campaign)
-    // Get meeting count for "converted" status
-    let meetingsQuery = getSupabase()
-      .from('meetings')
-      .select('*', { count: 'exact', head: true });
-    if (owner && owner !== 'all') {
-      meetingsQuery = meetingsQuery.eq('owner', owner);
-    }
-    meetingsQuery = meetingsQuery.gte('scheduled_at', LAUNCH_DATE);
-    const { count: meetingCount } = await meetingsQuery;
-
+    // Status: in_sequence = all processed leads for period, converted = status meeting_booked.
     const inSequence = totalCount || 0;
-    const converted = meetingCount || 0;
+    const converted = (currentLeads || []).filter(l => l.status === 'meeting_booked').length;
     const byStatus = {
       in_sequence: inSequence,
       meeting_booked: converted
@@ -545,20 +535,8 @@ class DashboardService {
 
     const sequenceFinished = finishedSet.size;
 
-    // Stage 4: Meetings Booked (from meetings table)
-    let meetingsQuery = getSupabase()
-      .from('meetings')
-      .select('*', { count: 'exact' });
-
-    if (owner && owner !== 'all') {
-      meetingsQuery = meetingsQuery.eq('owner', owner);
-    }
-    if (dateFilter) {
-      meetingsQuery = meetingsQuery.gte('scheduled_at', dateFilter);
-    }
-
-    const { count: totalMeetings, error: meetingsError } = await meetingsQuery;
-    if (meetingsError) throw meetingsError;
+    // Stage 4: Meetings Booked (status-driven so manual interested in Lemlist is reflected)
+    const totalMeetings = (leads || []).filter(l => l.status === 'meeting_booked').length;
 
     // Stage 5 & 6: Meeting Held & Qualified (from pipeline_opportunities — Salesforce)
     let meetingsHeld = 0;
@@ -603,16 +581,17 @@ class DashboardService {
     const { count: prevLeads } = await prevLeadsQuery;
 
     let prevMeetingsQuery = getSupabase()
-      .from('meetings')
+      .from('processed_leads')
       .select('*', { count: 'exact', head: true });
 
     if (owner && owner !== 'all') {
       prevMeetingsQuery = prevMeetingsQuery.eq('owner', owner);
     }
+    prevMeetingsQuery = prevMeetingsQuery.eq('status', 'meeting_booked');
     if (previousDateFilter) {
       prevMeetingsQuery = prevMeetingsQuery
-        .gte('scheduled_at', previousDateFilter.start)
-        .lt('scheduled_at', previousDateFilter.end);
+        .gte('processed_at', previousDateFilter.start)
+        .lt('processed_at', previousDateFilter.end);
     }
 
     const { count: prevMeetings } = await prevMeetingsQuery;

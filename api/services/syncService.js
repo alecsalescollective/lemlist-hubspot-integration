@@ -285,9 +285,10 @@ class SyncService {
           }
         }
 
-        // Detect sequence_finished leads from Lemlist export data
-        // Lemlist marks leads as done/finished when all steps have been sent
-        const finishedEmails = [];
+        // Detect status transitions from Lemlist export data.
+        // Interested/manual interested should map to meeting_booked for reporting.
+        const finishedEmails = new Set();
+        const meetingBookedEmails = new Set();
         for (const lead of leads) {
           if (!lead.email) continue;
           const email = lead.email.toLowerCase().trim();
@@ -295,44 +296,60 @@ class SyncService {
 
           // Skip if already meeting_booked (higher priority status)
           if (currentStatus === 'meeting_booked') continue;
-          // Skip if already sequence_finished
-          if (currentStatus === 'sequence_finished') continue;
 
           // A lead's sequence is "finished" if any of these are true:
-          // - They replied (email or LinkedIn) — reply ends the sequence
-          // - They booked a meeting — meeting ends the sequence
-          // - They were marked interested/notInterested
+          // - They replied (email or LinkedIn)
+          // - They were marked notInterested
           // - All sequence steps were sent (isFinished/isDone)
           // CSV fields are strings: non-empty = truthy
           // Also check step-level fields (repliedAt1, linkedinRepliedAt2, etc.)
           const hasReply = Object.keys(lead).some(k =>
             (k.startsWith('repliedAt') || k.startsWith('linkedinRepliedAt')) && lead[k]
           );
-          const isFinished = lead.isFinished || lead.isDone ||
-            lead.leadStatus === 'notInterested' ||
-            lead.leadStatus === 'interested' ||
-            lead.sequenceCompleted === true ||
-            hasReply ||                 // any reply (email or LinkedIn, any step)
-            lead.meetingBooked ||       // meeting booked
-            lead.interestedAt ||        // marked interested
-            lead.notInterestedAt;       // marked not interested
 
-          if (isFinished) {
-            finishedEmails.push(email);
+          const isInterested = lead.leadStatus === 'interested' || !!lead.interestedAt;
+          const hasMeetingBooked = !!lead.meetingBooked;
+          const isNotInterested = lead.leadStatus === 'notInterested' || !!lead.notInterestedAt;
+          const isSequenceDone = lead.isFinished || lead.isDone || lead.sequenceCompleted === true;
+
+          // Interested (including manual interested) is treated as meeting_booked for reporting.
+          if (isInterested || hasMeetingBooked) {
+            meetingBookedEmails.add(email);
+            continue;
+          }
+
+          // Already sequence_finished and no higher-priority upgrade to meeting_booked.
+          if (currentStatus === 'sequence_finished') continue;
+
+          if (isSequenceDone || hasReply || isNotInterested) {
+            finishedEmails.add(email);
           }
         }
 
-        if (finishedEmails.length > 0) {
+        if (meetingBookedEmails.size > 0) {
+          const { error: meetingStatusError } = await supabase
+            .from('processed_leads')
+            .update({ status: 'meeting_booked' })
+            .in('email', Array.from(meetingBookedEmails));
+
+          if (meetingStatusError) {
+            logger.error({ error: meetingStatusError.message }, 'Failed to update meeting_booked statuses');
+          } else {
+            logger.info({ count: meetingBookedEmails.size }, 'Updated leads to meeting_booked from Lemlist interested/meeting status');
+          }
+        }
+
+        if (finishedEmails.size > 0) {
           const { error: statusError } = await supabase
             .from('processed_leads')
             .update({ status: 'sequence_finished' })
-            .in('email', finishedEmails)
+            .in('email', Array.from(finishedEmails))
             .neq('status', 'meeting_booked');
 
           if (statusError) {
             logger.error({ error: statusError.message }, 'Failed to update sequence_finished statuses');
           } else {
-            logger.info({ count: finishedEmails.length }, 'Updated leads to sequence_finished');
+            logger.info({ count: finishedEmails.size }, 'Updated leads to sequence_finished');
           }
         }
       }
