@@ -307,10 +307,26 @@ class SyncService {
             (k.startsWith('repliedAt') || k.startsWith('linkedinRepliedAt')) && lead[k]
           );
 
-          const isInterested = lead.leadStatus === 'interested' || !!lead.interestedAt;
-          const hasMeetingBooked = !!lead.meetingBooked;
-          const isNotInterested = lead.leadStatus === 'notInterested' || !!lead.notInterestedAt;
-          const isSequenceDone = lead.isFinished || lead.isDone || lead.sequenceCompleted === true;
+          const normalizedLeadStatus = String(lead.leadStatus || lead.status || '')
+            .trim()
+            .toLowerCase();
+          const hasInterestedMarker = Object.keys(lead).some((key) => {
+            const normalizedKey = key.toLowerCase();
+            return normalizedKey.includes('interestedat')
+              && !normalizedKey.includes('notinterestedat')
+              && !!lead[key];
+          });
+          const hasNotInterestedMarker = Object.keys(lead).some((key) => {
+            const normalizedKey = key.toLowerCase();
+            return normalizedKey.includes('notinterestedat') && !!lead[key];
+          });
+
+          const isInterested = normalizedLeadStatus === 'interested' || hasInterestedMarker;
+          const hasMeetingBooked = !!lead.meetingBooked
+            && String(lead.meetingBooked).toLowerCase() !== 'false';
+          const isNotInterested = normalizedLeadStatus === 'notinterested' || hasNotInterestedMarker;
+          const isSequenceDone = lead.isFinished || lead.isDone
+            || lead.sequenceCompleted === true || lead.sequenceCompleted === 'true';
 
           // Interested (including manual interested) is treated as meeting_booked for reporting.
           if (isInterested || hasMeetingBooked) {
