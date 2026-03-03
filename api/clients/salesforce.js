@@ -244,30 +244,96 @@ class SalesforceClient {
     }
 
     const statusLabel = convertedStatus || await this.getConvertedLeadStatus();
-    const escapedLeadId = this.escapeSoqlLiteral(leadId);
+    const soapVersion = this.apiVersion.replace(/^v/i, '');
+    const soapPath = `/services/Soap/u/${soapVersion}`;
+    const escapeXml = (value) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
 
-    await this.request({
-      method: 'patch',
-      path: `/services/data/${this.apiVersion}/sobjects/Lead/${encodeURIComponent(leadId)}`,
-      data: {
-        IsConverted: true,
-        ConvertedStatus: statusLabel
+    const { accessToken, instanceUrl } = await this.getValidToken();
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:partner.soap.sforce.com">
+  <env:Header>
+    <urn:SessionHeader>
+      <urn:sessionId>${escapeXml(accessToken)}</urn:sessionId>
+    </urn:SessionHeader>
+  </env:Header>
+  <env:Body>
+    <urn:convertLead>
+      <urn:leadConverts>
+        <urn:leadId>${escapeXml(leadId)}</urn:leadId>
+        <urn:convertedStatus>${escapeXml(statusLabel)}</urn:convertedStatus>
+        <urn:doNotCreateOpportunity>true</urn:doNotCreateOpportunity>
+      </urn:leadConverts>
+    </urn:convertLead>
+  </env:Body>
+</env:Envelope>`;
+
+    let responseData;
+    try {
+      const response = await axios.post(
+        `${instanceUrl}${soapPath}`,
+        body,
+        {
+          headers: {
+            'Content-Type': 'text/xml; charset=UTF-8',
+            SOAPAction: '""'
+          }
+        }
+      );
+      responseData = String(response.data || '');
+    } catch (error) {
+      const rawError = String(error.response?.data || error.message || '');
+      if ((error.response?.status === 401 || rawError.includes('INVALID_SESSION_ID')) && this.clientId && this.clientSecret) {
+        const supabase = this.getSupabase();
+        const { data: tokenData } = await supabase
+          .from('salesforce_tokens')
+          .select('refresh_token')
+          .limit(1)
+          .single();
+
+        if (tokenData?.refresh_token) {
+          const refreshed = await this.refreshToken(tokenData.refresh_token);
+          const retryBody = body.replace(escapeXml(accessToken), escapeXml(refreshed.accessToken));
+          const retryResponse = await axios.post(
+            `${refreshed.instanceUrl}${soapPath}`,
+            retryBody,
+            {
+              headers: {
+                'Content-Type': 'text/xml; charset=UTF-8',
+                SOAPAction: '""'
+              }
+            }
+          );
+          responseData = String(retryResponse.data || '');
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
       }
-    });
+    }
 
-    const verifyRows = await this.query(
-      `SELECT Id, IsConverted, ConvertedContactId, ConvertedAccountId FROM Lead WHERE Id = '${escapedLeadId}' LIMIT 1`
-    );
+    const extractTag = (tagName) => {
+      const regex = new RegExp(`<(?:\\w+:)?${tagName}>([\\s\\S]*?)</(?:\\w+:)?${tagName}>`, 'i');
+      const match = responseData.match(regex);
+      return match ? match[1] : null;
+    };
 
-    const convertedLead = verifyRows?.[0];
-    if (!convertedLead || !convertedLead.IsConverted) {
-      throw new Error(`Lead ${leadId} conversion did not complete`);
+    const successValue = extractTag('success');
+    if (successValue !== 'true') {
+      const faultString = extractTag('faultstring');
+      const errorMessage = extractTag('message');
+      throw new Error(faultString || errorMessage || `Salesforce lead conversion failed for ${leadId}`);
     }
 
     return {
-      leadId: convertedLead.Id,
-      contactId: convertedLead.ConvertedContactId || null,
-      accountId: convertedLead.ConvertedAccountId || null,
+      leadId: extractTag('leadId') || leadId,
+      contactId: extractTag('contactId'),
+      accountId: extractTag('accountId'),
       convertedStatus: statusLabel
     };
   }
