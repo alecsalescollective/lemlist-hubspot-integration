@@ -13,6 +13,8 @@ class SalesforceClient {
     this.clientId = process.env.SALESFORCE_CLIENT_ID;
     this.clientSecret = process.env.SALESFORCE_CLIENT_SECRET;
     this.loginUrl = 'https://login.salesforce.com';
+    this.apiVersion = 'v59.0';
+    this.convertedLeadStatus = null;
   }
 
   /**
@@ -144,25 +146,39 @@ class SalesforceClient {
    * @returns {Array} - Query results
    */
   async query(soql) {
+    try {
+      const response = await this.request({
+        method: 'get',
+        path: `/services/data/${this.apiVersion}/query`,
+        params: { q: soql }
+      });
+      return response.data.records || [];
+    } catch (error) {
+      logger.error({ error: error.response?.data || error.message, soql }, 'Salesforce query failed');
+      throw error;
+    }
+  }
+
+  /**
+   * Run a generic Salesforce REST request with one-token-refresh retry on 401.
+   */
+  async request({ method, path, params, data }, allowRetry = true) {
     const { accessToken, instanceUrl } = await this.getValidToken();
 
     try {
-      const response = await axios.get(
-        `${instanceUrl}/services/data/v59.0/query`,
-        {
-          params: { q: soql },
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
+      return await axios({
+        method,
+        url: `${instanceUrl}${path}`,
+        params,
+        data,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         }
-      );
-
-      return response.data.records || [];
-
+      });
     } catch (error) {
       // If 401, try refreshing token and retry once
-      if (error.response?.status === 401) {
+      if (allowRetry && error.response?.status === 401) {
         logger.info('Salesforce 401, attempting token refresh and retry');
         const supabase = this.getSupabase();
         const { data: tokenData } = await supabase
@@ -173,25 +189,87 @@ class SalesforceClient {
 
         if (tokenData?.refresh_token) {
           const { accessToken: newToken, instanceUrl: newUrl } = await this.refreshToken(tokenData.refresh_token);
-
-          const retryResponse = await axios.get(
-            `${newUrl}/services/data/v59.0/query`,
-            {
-              params: { q: soql },
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-                'Content-Type': 'application/json'
-              }
+          return await axios({
+            method,
+            url: `${newUrl}${path}`,
+            params,
+            data,
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+              'Content-Type': 'application/json'
             }
-          );
-
-          return retryResponse.data.records || [];
+          });
         }
       }
 
-      logger.error({ error: error.response?.data || error.message }, 'Salesforce query failed');
       throw error;
     }
+  }
+
+  /**
+   * Escape a literal for embedding inside SOQL single-quoted strings.
+   */
+  escapeSoqlLiteral(value) {
+    return String(value || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'");
+  }
+
+  /**
+   * Get one converted lead status label (cached).
+   */
+  async getConvertedLeadStatus() {
+    if (this.convertedLeadStatus) {
+      return this.convertedLeadStatus;
+    }
+
+    const rows = await this.query(
+      'SELECT MasterLabel, SortOrder FROM LeadStatus WHERE IsConverted = true ORDER BY SortOrder ASC LIMIT 1'
+    );
+
+    if (!rows || rows.length === 0 || !rows[0].MasterLabel) {
+      throw new Error('No converted LeadStatus found in Salesforce');
+    }
+
+    this.convertedLeadStatus = rows[0].MasterLabel;
+    return this.convertedLeadStatus;
+  }
+
+  /**
+   * Convert a Salesforce Lead into Contact/Account.
+   */
+  async convertLeadToContact(leadId, convertedStatus = null) {
+    if (!leadId) {
+      throw new Error('Lead ID is required for Salesforce conversion');
+    }
+
+    const statusLabel = convertedStatus || await this.getConvertedLeadStatus();
+    const escapedLeadId = this.escapeSoqlLiteral(leadId);
+
+    await this.request({
+      method: 'patch',
+      path: `/services/data/${this.apiVersion}/sobjects/Lead/${encodeURIComponent(leadId)}`,
+      data: {
+        IsConverted: true,
+        ConvertedStatus: statusLabel
+      }
+    });
+
+    const verifyRows = await this.query(
+      `SELECT Id, IsConverted, ConvertedContactId, ConvertedAccountId FROM Lead WHERE Id = '${escapedLeadId}' LIMIT 1`
+    );
+
+    const convertedLead = verifyRows?.[0];
+    if (!convertedLead || !convertedLead.IsConverted) {
+      throw new Error(`Lead ${leadId} conversion did not complete`);
+    }
+
+    return {
+      leadId: convertedLead.Id,
+      contactId: convertedLead.ConvertedContactId || null,
+      accountId: convertedLead.ConvertedAccountId || null,
+      convertedStatus: statusLabel
+    };
   }
 }
 

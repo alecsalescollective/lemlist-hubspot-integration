@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { createLogger } = require('../utils/logger');
 const HubSpotClient = require('../clients/hubspot');
 const LemlistClient = require('../clients/lemlist');
+const SalesforceClient = require('../clients/salesforce');
 const { config } = require('../config');
 const routingConfig = require('../config/routing.json');
 const curatedSourceContexts = require('../config/source-contexts.json');
@@ -9,7 +10,7 @@ const curatedSourceContexts = require('../config/source-contexts.json');
 const logger = createLogger('lead-pipeline');
 
 // Lazy initialization
-let supabase, hubspot, lemlist;
+let supabase, hubspot, lemlist, salesforce;
 
 function getClients() {
   if (!supabase) {
@@ -24,7 +25,10 @@ function getClients() {
   if (!lemlist) {
     lemlist = new LemlistClient(config.lemlist);
   }
-  return { supabase, hubspot, lemlist };
+  if (!salesforce) {
+    salesforce = new SalesforceClient();
+  }
+  return { supabase, hubspot, lemlist, salesforce };
 }
 
 /**
@@ -140,6 +144,8 @@ class LeadPipelineService {
       'lifecyclestage',
       'hs_email_optout',
       'source__sfdc_contact_record',
+      'salesforcecontactid',
+      'salesforceleadid',
       triggerField,
       ...aiContextProps
     ]));
@@ -232,6 +238,18 @@ class LeadPipelineService {
       logger.warn({ contactId, ownerName }, 'No campaign configured for owner, skipping');
       return { skipped: true };
     }
+
+    // Ensure Salesforce has a Contact for this person.
+    // HubSpot often syncs these as Leads; Lemlist opportunity creation relies on Contact records.
+    const conversionResult = await this.ensureSalesforceContactForContact({
+      contactId,
+      email,
+      firstName: props.firstname || '',
+      lastName: props.lastname || '',
+      salesforceContactId: props.salesforcecontactid || null,
+      salesforceLeadId: props.salesforceleadid || null
+    });
+    logger.info({ contactId, email, conversionStatus: conversionResult.status }, 'Salesforce contact readiness check complete');
 
     const sourceContextSummary = await this.getSourceContextSummary(sourceDetail);
 
@@ -452,6 +470,94 @@ class LeadPipelineService {
     }
 
     throw error;
+  }
+
+  /**
+   * Ensure an email maps to a Salesforce Contact.
+   * If only a Salesforce Lead exists, convert it before continuing.
+   */
+  async ensureSalesforceContactForContact({
+    contactId,
+    email,
+    firstName,
+    lastName,
+    salesforceContactId = null,
+    salesforceLeadId = null
+  }) {
+    const { salesforce } = getClients();
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    if (!normalizedEmail) {
+      return { status: 'skipped_missing_email' };
+    }
+
+    // If HubSpot already has Salesforce Contact ID, no conversion needed.
+    const knownContactId = salesforceContactId ? String(salesforceContactId).trim() : '';
+    if (knownContactId) {
+      return { status: 'already_contact', contactId: knownContactId };
+    }
+
+    const escapedEmail = this.escapeSoqlLiteral(normalizedEmail);
+
+    // Prefer existing Contact by email.
+    const existingContacts = await salesforce.query(
+      `SELECT Id, Email FROM Contact WHERE Email = '${escapedEmail}' ORDER BY LastModifiedDate DESC LIMIT 1`
+    );
+    if (existingContacts.length > 0) {
+      return { status: 'contact_exists', contactId: existingContacts[0].Id };
+    }
+
+    let leadRows = [];
+    const knownLeadId = salesforceLeadId ? String(salesforceLeadId).trim() : '';
+    if (knownLeadId) {
+      const escapedLeadId = this.escapeSoqlLiteral(knownLeadId);
+      leadRows = await salesforce.query(
+        `SELECT Id, IsConverted, ConvertedContactId FROM Lead WHERE Id = '${escapedLeadId}' LIMIT 1`
+      );
+    } else {
+      leadRows = await salesforce.query(
+        `SELECT Id, IsConverted, ConvertedContactId, Email FROM Lead WHERE Email = '${escapedEmail}' ORDER BY LastModifiedDate DESC LIMIT 1`
+      );
+    }
+
+    if (!leadRows || leadRows.length === 0) {
+      logger.warn({ contactId, email: normalizedEmail }, 'No Salesforce Lead found to convert; proceeding');
+      return { status: 'no_lead_found' };
+    }
+
+    const lead = leadRows[0];
+    if (lead.IsConverted) {
+      return {
+        status: 'already_converted',
+        leadId: lead.Id,
+        contactId: lead.ConvertedContactId || null
+      };
+    }
+
+    const converted = await salesforce.convertLeadToContact(lead.Id);
+
+    logger.info({
+      contactId,
+      email: normalizedEmail,
+      firstName,
+      lastName,
+      leadId: lead.Id,
+      contactIdFromConversion: converted.contactId
+    }, 'Converted Salesforce Lead to Contact for Lemlist-ready workflow');
+
+    return {
+      status: 'lead_converted',
+      leadId: converted.leadId,
+      contactId: converted.contactId
+    };
+  }
+
+  /**
+   * Escape a literal for embedding in SOQL single-quoted strings.
+   */
+  escapeSoqlLiteral(value) {
+    return String(value || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'");
   }
 
   /**
