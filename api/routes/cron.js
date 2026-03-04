@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { createLogger } = require('../utils/logger');
 const leadPipelineService = require('../services/leadPipelineService');
+const nurtureService = require('../services/nurtureService');
 
 const logger = createLogger('cron-route');
 
@@ -89,6 +90,56 @@ router.get('/sync-leads', async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+/**
+ * POST /api/cron/nurture-automation
+ * Triggered daily — processes Closed Lost - Nurture opportunities
+ */
+router.post('/nurture-automation', async (req, res) => {
+  if (!verifyCronAuth(req)) {
+    logger.warn('Unauthorized cron request for nurture-automation');
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    logger.info('Cron triggered: nurture-automation');
+
+    const results = await nurtureService.run();
+
+    logger.info({
+      processed: results.processed,
+      succeeded: results.succeeded,
+      failed: results.failed
+    }, 'Cron nurture-automation completed');
+
+    res.json({ success: true, results });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Cron nurture-automation failed');
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/cron/nurture-automation
+ * Support GET for easier testing
+ */
+router.get('/nurture-automation', async (req, res) => {
+  if (!verifyCronAuth(req)) {
+    logger.warn('Unauthorized cron request for nurture-automation');
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    logger.info('Cron triggered (GET): nurture-automation');
+
+    const results = await nurtureService.run();
+
+    res.json({ success: true, results });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Cron nurture-automation failed');
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

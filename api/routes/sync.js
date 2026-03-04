@@ -532,4 +532,22 @@ router.post('/trigger', async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/sync/trigger-nurture
+ * Manually trigger the Closed Lost - Nurture automation
+ */
+router.post('/trigger-nurture', async (req, res, next) => {
+  try {
+    const nurtureService = require('../services/nurtureService');
+    const results = await nurtureService.run();
+
+    res.json({
+      message: 'Nurture automation completed',
+      results
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

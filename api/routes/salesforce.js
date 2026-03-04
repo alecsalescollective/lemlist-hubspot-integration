@@ -108,4 +108,34 @@ router.get('/status', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/salesforce/discover-fields?object=Opportunity
+ * Temporary endpoint to discover custom field API names.
+ * Usage: /api/salesforce/discover-fields?object=Opportunity&search=gap
+ */
+router.get('/discover-fields', async (req, res) => {
+  const { object = 'Opportunity', search } = req.query;
+
+  try {
+    const sfClient = new SalesforceClient();
+    const soql = `SELECT QualifiedApiName, Label, DataType FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${sfClient.escapeSoqlLiteral(object)}'${search ? ` AND Label LIKE '%${sfClient.escapeSoqlLiteral(search)}%'` : ''} ORDER BY Label`;
+
+    const results = await sfClient.query(soql);
+
+    // Filter to custom fields by default (show all if search provided)
+    const fields = results
+      .filter(f => search || f.QualifiedApiName?.endsWith('__c'))
+      .map(f => ({
+        apiName: f.QualifiedApiName,
+        label: f.Label,
+        type: f.DataType,
+      }));
+
+    res.json({ object, fieldCount: fields.length, fields });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Salesforce field discovery failed');
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

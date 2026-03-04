@@ -65,6 +65,17 @@ class SyncService {
         }
       }
 
+      // Sync Closed Lost - Nurture automation
+      if (type === 'all' || type === 'nurture') {
+        try {
+          const nurtureService = require('./nurtureService');
+          results.nurture = await nurtureService.run();
+        } catch (error) {
+          logger.warn({ error: error.message }, 'Nurture automation skipped');
+          results.nurture = { processed: 0, message: error.message };
+        }
+      }
+
       // Sync Salesforce pipeline data
       if (type === 'all' || type === 'pipeline') {
         try {
