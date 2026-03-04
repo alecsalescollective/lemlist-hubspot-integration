@@ -18,6 +18,20 @@ async function analyzeNurtureDeal(dealNotes, opportunityName) {
     throw new Error('ANTHROPIC_API_KEY not configured');
   }
 
+  // Strip HTML tags and decode common entities from Salesforce Rich Text fields
+  function stripHtml(html) {
+    return String(html)
+      .replace(/<[^>]+>/g, ' ')        // remove tags
+      .replace(/&#39;/g, "'")           // decode entities
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')            // collapse whitespace
+      .trim();
+  }
+
   // Build the deal notes text from available fields
   const noteSections = [];
   const fieldLabels = {
@@ -33,7 +47,10 @@ async function analyzeNurtureDeal(dealNotes, opportunityName) {
   for (const [key, label] of Object.entries(fieldLabels)) {
     const value = dealNotes[key];
     if (value && String(value).trim()) {
-      noteSections.push(`**${label}:**\n${String(value).trim()}`);
+      const cleaned = stripHtml(value);
+      if (cleaned) {
+        noteSections.push(`**${label}:**\n${cleaned}`);
+      }
     }
   }
 
