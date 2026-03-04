@@ -112,10 +112,13 @@ ${noteSections.join('\n\n')}`;
       }
     );
 
-    const content = response.data.content?.[0]?.text;
+    let content = response.data.content?.[0]?.text;
     if (!content) {
       throw new Error('Empty response from Anthropic');
     }
+
+    // Strip markdown code fences if present (```json ... ```)
+    content = content.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
     const parsed = JSON.parse(content);
 
