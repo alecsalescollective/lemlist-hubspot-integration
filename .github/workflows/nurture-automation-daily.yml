@@ -2,7 +2,7 @@ name: Nurture Automation (Daily)
 
 on:
   schedule:
-    - cron: "0 15 * * *"  # 15:00 UTC daily (8am MST)
+    - cron: "0 11 * * *"  # 11:00 UTC daily (6am EST)
   workflow_dispatch:
 
 concurrency:
