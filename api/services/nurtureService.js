@@ -40,6 +40,7 @@ class NurtureService {
 
       let succeeded = 0;
       let failed = 0;
+      const errors = [];
 
       for (const opp of opportunities) {
         try {
@@ -47,10 +48,9 @@ class NurtureService {
           succeeded++;
         } catch (error) {
           failed++;
-          logger.error(
-            { oppId: opp.Id, oppName: opp.Name, error: error.message },
-            'Failed to process opportunity'
-          );
+          const errorDetail = { oppId: opp.Id, oppName: opp.Name, error: error.message };
+          errors.push(errorDetail);
+          logger.error(errorDetail, 'Failed to process opportunity');
           await this.markOpportunityProcessed(opp.Id, {
             status: 'failed',
             errorMessage: error.message,
@@ -59,7 +59,7 @@ class NurtureService {
       }
 
       logger.info({ processed: opportunities.length, succeeded, failed }, 'Nurture automation run completed');
-      return { processed: opportunities.length, succeeded, failed };
+      return { processed: opportunities.length, succeeded, failed, errors };
     } catch (error) {
       logger.error({ error: error.message }, 'Nurture automation run failed');
       throw error;
